@@ -119,7 +119,7 @@ __device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_s
 
 #define fnv(x,y) ((x) * FNV_PRIME ^(y))
 
-__device__  void fnv4(uint * x, const uint * y)
+__device__ void fnv4(uint * x, const uint * y)
 {
 	x[0] = fnv(x[0], y[0]);
 	x[1] = fnv(x[1], y[1]);
@@ -165,7 +165,7 @@ __device__ uint inner_loop(uint* mix, uint thread_id, uint* share, hash128_t con
 		
 		bool update_share = thread_id == (a / 4) % THREADS_PER_HASH;
 
-		#pragma unroll 4
+		//#pragma unroll 4
 		for (uint i = 0; i < 4; i++)
 		{
 			
@@ -256,7 +256,7 @@ __global__ void ethash_search(
 	ulong target
 	)
 {
-	__shared__ compute_hash_share share[64];// = new compute_hash_share[d_workgroup_size / THREADS_PER_HASH];
+	__shared__ compute_hash_share share[4];// = new compute_hash_share[d_workgroup_size / THREADS_PER_HASH];
 	
 	uint const gid = blockIdx.x * blockDim.x + threadIdx.x;
 	
