@@ -16,6 +16,10 @@ if (ETHASHCL)
 	include_directories(${OpenCL_INCLUDE_DIRS})
 endif ()
 
+if (ETHASHCU)
+	include_directories(${CUDA_INCLUDE_DIRS})
+endif ()
+
 if (CPUID_FOUND)
 	include_directories(${Cpuid_INCLUDE_DIRS})
 endif ()
@@ -32,6 +36,10 @@ target_link_libraries(${EXECUTABLE} devcrypto)
 
 if (ETHASHCL)
 	target_link_libraries(${EXECUTABLE} ethash-cl)
+endif ()
+
+if (ETHASHCU)
+	target_link_libraries(${EXECUTABLE} ethash-cu)
 endif ()
 
 if (CPUID_FOUND)

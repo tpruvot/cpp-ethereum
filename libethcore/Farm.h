@@ -89,6 +89,12 @@ public:
 	bool startGPU() { return start<typename PoW::GPUMiner>(); }
 
 	/**
+	* @brief (Re)start miners for CUDA only.
+	* @returns true if started properly.
+	*/
+	bool startCUDA() { return start<typename PoW::CUDAMiner>(); }
+
+	/**
 	 * @brief Stop all mining activities.
 	 */
 	void stop()
