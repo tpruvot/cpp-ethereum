@@ -29,17 +29,9 @@ __device__ __constant__ ulong const keccak_round_constants[24] = {
 
 //#define ROTL64(a, offset) ((a) << (offset)) ^ ((a) >> (64 - offset))
 
-__device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_size)
+__device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_size, uint out_size)
 {
-	for (uint i = in_size+1; i < 25; i++)
-	{
-		s[i] = 0;
-	}
-
-	s[in_size] = 0x0000000000000001; // was ^=, but was always 0 anyway
-	s[24 - out_size * 2] = 0x8000000000000000; // was ^=. but was always 0 anyway
-
-	ulong t[5], u[5], v, w;
+	ulong t[5], u, v, w;
 	
 	for (size_t i = 0; i < 24; i++) {
 		/* theta: c = a[0,i] ^ a[1,i] ^ .. a[4,i] */
@@ -50,19 +42,7 @@ __device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_s
 		t[4] = s[4] ^ s[9] ^ s[14] ^ s[19] ^ s[24];
 
 		/* theta: d[i] = c[i+4] ^ rotl(c[i+1],1) */
-		u[0] = t[4] ^ ROTL64(t[1], 1);
-		u[1] = t[0] ^ ROTL64(t[2], 1);
-		u[2] = t[1] ^ ROTL64(t[3], 1);
-		u[3] = t[2] ^ ROTL64(t[4], 1);
-		u[4] = t[3] ^ ROTL64(t[0], 1);
-
 		/* theta: a[0,i], a[1,i], .. a[4,i] ^= d[i] */
-		s[0] ^= u[0]; s[5] ^= u[0]; s[10] ^= u[0]; s[15] ^= u[0]; s[20] ^= u[0];
-		s[1] ^= u[1]; s[6] ^= u[1]; s[11] ^= u[1]; s[16] ^= u[1]; s[21] ^= u[1];
-		s[2] ^= u[2]; s[7] ^= u[2]; s[12] ^= u[2]; s[17] ^= u[2]; s[22] ^= u[2];
-		s[3] ^= u[3]; s[8] ^= u[3]; s[13] ^= u[3]; s[18] ^= u[3]; s[23] ^= u[3];
-		s[4] ^= u[4]; s[9] ^= u[4]; s[14] ^= u[4]; s[19] ^= u[4]; s[24] ^= u[4];
-		/*
 		u = t[4] ^ ROTL64(t[1], 1);
 		s[0] ^= u; s[5] ^= u; s[10] ^= u; s[15] ^= u; s[20] ^= u;
 		u = t[0] ^ ROTL64(t[2], 1);
@@ -73,7 +53,7 @@ __device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_s
 		s[3] ^= u; s[8] ^= u; s[13] ^= u; s[18] ^= u; s[23] ^= u;
 		u = t[3] ^ ROTL64(t[0], 1);
 		s[4] ^= u; s[9] ^= u; s[14] ^= u; s[19] ^= u; s[24] ^= u;
-		*/
+		 
 		/* rho pi: b[..] = rotl(a[..], ..) */
 		v = s[1];
 		s[1] = ROTL64(s[6], 44);
@@ -102,14 +82,21 @@ __device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_s
 		s[10] = ROTL64(v, 1);
 
 		/* chi: a[i,j] ^= ~b[i,j+1] & b[i,j+2] */
-		v = s[0]; w = s[1]; s[0] ^= (~w) & s[2]; s[1] ^= (~s[2]) & s[3]; s[2] ^= (~s[3]) & s[4]; s[3] ^= (~s[4]) & v; s[4] ^= (~v) & w;
-		v = s[5]; w = s[6]; s[5] ^= (~w) & s[7]; s[6] ^= (~s[7]) & s[8]; s[7] ^= (~s[8]) & s[9]; s[8] ^= (~s[9]) & v; s[9] ^= (~v) & w;
+		v = s[0]; w = s[1]; s[0] ^= (~w) & s[2]; 
+		
+		// squeeze this in here
+		/* iota: a[0,0] ^= round constant */
+		s[0] ^= keccak_round_constants[i];
+
+		// continue chi
+		s[1] ^= (~s[2]) & s[3]; s[2] ^= (~s[3]) & s[4]; s[3] ^= (~s[4]) & v; s[4] ^= (~v) & w;
+		if (i == 23 && out_size == 4) return;
+		v = s[5]; w = s[6]; s[5] ^= (~w) & s[7]; s[6] ^= (~s[7]) & s[8]; s[7] ^= (~s[8]) & s[9]; 
+		if (i == 23 && out_size == 8) return;
+		s[8] ^= (~s[9]) & v; s[9] ^= (~v) & w;
 		v = s[10]; w = s[11]; s[10] ^= (~w) & s[12]; s[11] ^= (~s[12]) & s[13]; s[12] ^= (~s[13]) & s[14]; s[13] ^= (~s[14]) & v; s[14] ^= (~v) & w;
 		v = s[15]; w = s[16]; s[15] ^= (~w) & s[17]; s[16] ^= (~s[17]) & s[18]; s[17] ^= (~s[18]) & s[19]; s[18] ^= (~s[19]) & v; s[19] ^= (~v) & w;
 		v = s[20]; w = s[21]; s[20] ^= (~w) & s[22]; s[21] ^= (~s[22]) & s[23]; s[22] ^= (~s[23]) & s[24]; s[23] ^= (~s[24]) & v; s[24] ^= (~v) & w;
-
-		/* iota: a[0,0] ^= round constant */
-		s[0] ^= keccak_round_constants[i];
 	}
 }
 
@@ -121,10 +108,10 @@ __device__ static void keccak_f1600_no_absorb(ulong* s, uint in_size, uint out_s
 
 __device__ void fnv4(uint * x, const uint * y)
 {
-	x[0] = fnv(x[0], y[0]);
-	x[1] = fnv(x[1], y[1]);
-	x[2] = fnv(x[2], y[2]);
-	x[3] = fnv(x[3], y[3]);
+#pragma unroll 4
+	for (uint i = 0; i < 4; i++)
+		x[i] = fnv(x[i], y[i]);
+
 }
 
 
@@ -136,16 +123,26 @@ __device__ uint  fnv_reduce(uint * v)
 __device__ hash64_t init_hash(hash32_t const* header, ulong nonce)
 {
 	hash64_t init;
-	uint const init_size = countof(init.ulongs);
-	uint const hash_size = countof(header->ulongs);
+	//uint const init_size = countof(init.ulongs);	//	8
+	//uint const hash_size = countof(header->ulongs);	//	4
 
 	// sha3_512(header .. nonce)
 	ulong state[25];
-	copy(state, header->ulongs, hash_size);
-	state[hash_size] = nonce;
-	keccak_f1600_no_absorb(state, hash_size + 1, init_size);
+
+	copy(state, header->ulongs, 4);
+	state[4] = nonce;
+	state[5] = 0x0000000000000001;
+	state[6] = 0;
+	state[7] = 0;
+	state[8] = 0x8000000000000000;
+	for (uint i = 9; i < 25; i++)
+	{
+		state[i] = 0;
+	}
+	
+	keccak_f1600_block(state, 8);// , hash_size + 1, init_size);
 	 
-	copy(init.ulongs, state, init_size);
+	copy(init.ulongs, state, 8);
 	return init;
 }
 
@@ -171,10 +168,11 @@ __device__ uint inner_loop(uint* mix, uint thread_id, uint* share, hash128_t con
 			
 			if (update_share)
 			{
-				*share = 32 * (fnv(init0 ^ (a + i), mix[i]) % d_dag_size);
+				*share = (fnv(init0 ^ (a + i), mix[i]) % d_dag_size);
 			}
 			__syncthreads();
-			fnv4(mix, &(g_dag[*share+t4]));
+			//fnv4(mix, &(g_dag[*share+t4]));
+			fnv4(mix, &(g_dag[*share].uints[t4]));
 		}
 		
 	} while ((a += 4) != 64);// d_acceses);
@@ -187,17 +185,28 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 	ulong state[25];
 
 	hash32_t hash;
-	uint const hash_size = countof(hash.ulongs);
-	uint const init_size = countof(init->ulongs);
-	uint const mix_size  = countof(mix->ulongs);
+	//uint const hash_size = countof(hash.ulongs);	//	4
+	//uint const init_size = countof(init->ulongs);	//	8
+	//uint const mix_size  = countof(mix->ulongs);	//	4
 
 	// keccak_256(keccak_512(header..nonce) .. mix);
-	copy(state, init->ulongs, init_size);
-	copy(state + init_size, mix->ulongs, mix_size);
-	keccak_f1600_no_absorb(state, init_size + mix_size, hash_size);
+	copy(state, init->ulongs, 8);
+	copy(state + 8, mix->ulongs, 4);
+	state[12] = 0x0000000000000001;
+	for (uint i = 13; i < 16; i++)
+	{
+		state[i] = 0;
+	}
+	state[16] = 0x8000000000000000;
+	for (uint i = 17; i < 25; i++)
+	{
+		state[i] = 0;
+	}
+
+	keccak_f1600_block(state,4);// , init_size + mix_size, hash_size);
 
 	// copy out
-	copy(hash.ulongs, state, hash_size);
+	copy(hash.ulongs, state, 4);
 	return hash;
 }
 

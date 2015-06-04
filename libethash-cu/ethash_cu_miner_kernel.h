@@ -17,13 +17,13 @@ typedef union
 	uint  uints[64 / sizeof(uint)];
 } hash64_t;
 
-/*
+
 typedef union
 {
 	uint uints[128 / sizeof(uint)]; 
 } hash128_t;
-*/
-typedef uint hash128_t;
+
+//typedef uint hash128_t;
 
 cudaError set_constants(
 	uint * dag_size,
