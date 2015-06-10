@@ -181,7 +181,7 @@ __device__ uint inner_loop(hash16_t * mix, uint thread_id, uint* share, hash128_
 			__threadfence_block();
 			//fnv4(mix, &(g_dag[*share+t4]));
 			//fnv4(mix, &(g_dag[*share].ulongs[t4]));
-			//fnv4(mix, &(g_dag[*share].h16s[thread_id]));
+			fnv4(mix, &(g_dag[*share].h16s[thread_id]));
 		}
 		
 	} while ((a += 4) != ACCESSES);// d_acceses);

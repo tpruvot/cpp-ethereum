@@ -342,7 +342,7 @@ private:
 		cout << "Preparing DAG..." << endl;
 		Ethash::prep(genesis);
 
-		genesis.difficulty = u256(1) << 16;// 63;
+		genesis.difficulty = u256(1) << 63;
 		genesis.noteDirty();
 		f.setWork(genesis);
 		if (_m == MinerType::CPU)
