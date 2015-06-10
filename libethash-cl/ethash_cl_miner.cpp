@@ -339,7 +339,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	unsigned buf = 0;
 	std::random_device engine;
-	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
+	uint64_t start_nonce =  std::uniform_int_distribution<uint64_t>()(engine);
 	for (; ; start_nonce += c_search_batch_size)
 	{
 		// supply output buffer to kernel

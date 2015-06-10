@@ -6,7 +6,7 @@
 
 #include "ethash_cu_miner_kernel.h"
 #include "ethash_cu_miner_kernel_globals.h"
-#include "rotl64.cuh"
+//#include "rotl64.cuh"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
 #include "vector_types.h"
@@ -28,9 +28,55 @@ __device__ __constant__ ulong const keccak_round_constants[24] = {
 	0x000000000000800AULL, 0x800000008000000AULL, 0x8000000080008081ULL,
 	0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL
 };
+/*
+__device__ ulong ROTL64(const ulong x, const int offset)
+{
+	ulong res;
+	asm("{\n\t"
+		".reg .u32 tl,th,vl,vh;\n\t"
+		".reg .pred p;\n\t"
+		"mov.b64 {tl,th}, %1;\n\t"
+		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
+		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
+		"setp.lt.u32 p, %2, 32;\n\t"
+		"@!p mov.b64 %0, {vl,vh};\n\t"
+		"@p  mov.b64 %0, {vh,vl};\n\t"
+		"}"
+		: "=l"(res) : "l"(x), "r"(offset)
+		);
+	return res;
+}
+*/
 
-//#define ROTL64(a, offset) ((a) << (offset)) ^ ((a) >> (64 - offset))
+__device__ ulong ROTL64H(const ulong x, const int offset)
+{
+	ulong res;
+	asm("{\n\t"
+		".reg .u32 tl,th,vl,vh;\n\t"
+		"mov.b64 {tl,th}, %1;\n\t"
+		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
+		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
+		"mov.b64 %0, {vl,vh};\n\t"
+		"}"
+		: "=l"(res) : "l"(x), "r"(offset)
+		);
+	return res;
+}
 
+__device__ ulong ROTL64L(const ulong x, const int offset)
+{
+	ulong res;
+	asm("{\n\t"
+		".reg .u32 tl,th,vl,vh;\n\t"
+		"mov.b64 {tl,th}, %1;\n\t"
+		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
+		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
+		"mov.b64 %0, {vh,vl};\n\t"
+		"}"
+		: "=l"(res) : "l"(x), "r"(offset)
+		);
+	return res;
+}
 __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_size, uint out_size)
 {
 	ulong t[5], u, v;
@@ -45,44 +91,44 @@ __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_si
 
 		/* theta: d[i] = c[i+4] ^ rotl(c[i+1],1) */
 		/* theta: a[0,i], a[1,i], .. a[4,i] ^= d[i] */
-		u = t[4] ^ ROTL64(t[1], 1);
+		u = t[4] ^ ROTL64L(t[1], 1);
 		s[0] ^= u; s[5] ^= u; s[10] ^= u; s[15] ^= u; s[20] ^= u;
-		u = t[0] ^ ROTL64(t[2], 1);
+		u = t[0] ^ ROTL64L(t[2], 1);
 		s[1] ^= u; s[6] ^= u; s[11] ^= u; s[16] ^= u; s[21] ^= u;
-		u = t[1] ^ ROTL64(t[3], 1);
+		u = t[1] ^ ROTL64L(t[3], 1);
 		s[2] ^= u; s[7] ^= u; s[12] ^= u; s[17] ^= u; s[22] ^= u;
-		u = t[2] ^ ROTL64(t[4], 1);
+		u = t[2] ^ ROTL64L(t[4], 1);
 		s[3] ^= u; s[8] ^= u; s[13] ^= u; s[18] ^= u; s[23] ^= u;
-		u = t[3] ^ ROTL64(t[0], 1);
+		u = t[3] ^ ROTL64L(t[0], 1);
 		s[4] ^= u; s[9] ^= u; s[14] ^= u; s[19] ^= u; s[24] ^= u;
 		 
 		/* rho pi: b[..] = rotl(a[..], ..) */
 		u = s[1];
 
-		s[1] = ROTL64(s[6], 44);
-		s[6] = ROTL64(s[9], 20);
-		s[9] = ROTL64(s[22], 61);
-		s[22] = ROTL64(s[14], 39);
-		s[14] = ROTL64(s[20], 18);
-		s[20] = ROTL64(s[2], 62);
-		s[2] = ROTL64(s[12], 43);
-		s[12] = ROTL64(s[13], 25);
-		s[13] = ROTL64(s[19], 8);
-		s[19] = ROTL64(s[23], 56);
-		s[23] = ROTL64(s[15], 41);
-		s[15] = ROTL64(s[4], 27);
-		s[4] = ROTL64(s[24], 14);
-		s[24] = ROTL64(s[21], 2);
-		s[21] = ROTL64(s[8], 55);
-		s[8] = ROTL64(s[16], 45);
-		s[16] = ROTL64(s[5], 36);
-		s[5] = ROTL64(s[3], 28);
-		s[3] = ROTL64(s[18], 21);
-		s[18] = ROTL64(s[17], 15);
-		s[17] = ROTL64(s[11], 10);
-		s[11] = ROTL64(s[7], 6);
-		s[7] = ROTL64(s[10], 3);
-		s[10] = ROTL64(u, 1);
+		s[1] = ROTL64H(s[6], 44);
+		s[6] = ROTL64L(s[9], 20);
+		s[9] = ROTL64H(s[22], 61);
+		s[22] = ROTL64H(s[14], 39);
+		s[14] = ROTL64L(s[20], 18);
+		s[20] = ROTL64H(s[2], 62);
+		s[2] = ROTL64H(s[12], 43);
+		s[12] = ROTL64L(s[13], 25);
+		s[13] = ROTL64L(s[19], 8);
+		s[19] = ROTL64H(s[23], 56);
+		s[23] = ROTL64H(s[15], 41);
+		s[15] = ROTL64L(s[4], 27);
+		s[4] = ROTL64L(s[24], 14);
+		s[24] = ROTL64L(s[21], 2);
+		s[21] = ROTL64H(s[8], 55);
+		s[8] = ROTL64H(s[16], 45);
+		s[16] = ROTL64H(s[5], 36);
+		s[5] = ROTL64L(s[3], 28);
+		s[3] = ROTL64L(s[18], 21);
+		s[18] = ROTL64L(s[17], 15);
+		s[17] = ROTL64L(s[11], 10);
+		s[11] = ROTL64L(s[7], 6);
+		s[7] = ROTL64L(s[10], 3);
+		s[10] = ROTL64L(u, 1);
 
 		/* chi: a[i,j] ^= ~b[i,j+1] & b[i,j+2] */
 		u = s[0]; v = s[1]; s[0] ^= (~v) & s[2]; 
@@ -111,14 +157,43 @@ __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_si
 
 __device__ void fnv4(hash16_t * x, const hash16_t * y)
 {
-	//for (uint i = 0; i < 4; i++)
-	//	x[i] = fnv(x[i], y[i]);
+	
 	x->uints[0] *= FNV_PRIME;
 	x->uints[1] *= FNV_PRIME;
 	x->uints[2] *= FNV_PRIME;
 	x->uints[3] *= FNV_PRIME;
 	x->ulongs[0] ^= y->ulongs[0];
 	x->ulongs[1] ^= y->ulongs[1];
+	
+	/*
+	asm("{\n\t"
+		".reg.s32 	r<9>;\n\t"
+		".reg.s64 	rd<9>;\n\t"
+		"ld.param.u64 	rd1, [%0];\n\t"
+		"ld.param.u64 	rd2, [%1];\n\t"
+		"ld.u32 	r1, [rd1];\n\t"
+		"mul.lo.s32 	r2, r1, 16777619;\n\t"
+		"ld.u32 	r3, [rd1 + 4];\n\t"
+		"ld.u32 	r4, [rd1 + 8];\n\t"
+		"ld.u32 	r5, [rd1 + 12];\n\t"
+		"st.u32[rd1], r2;\n\t"
+		"mul.lo.s32 	r6, r3, 16777619;\n\t"
+		"st.u32[rd1 + 4], r6;\n\t"
+		"mul.lo.s32 	r7, r4, 16777619;\n\t"
+		"st.u32[rd1 + 8], r7;\n\t"
+		"mul.lo.s32 	r8, r5, 16777619;\n\t"
+		"st.u32[%rd1 + 12], r8;\n\t"
+		"ld.u64 	rd3, [rd2];\n\t"
+		"ld.u64 	rd4, [rd1];\n\t"
+		"xor.b64  	rd5, rd4, rd3;\n\t"
+		"ld.u64 	rd6, [rd1 + 8];\n\t"
+		"st.u64[rd1], rd5;\n\t"
+		"ld.u64 	rd7, [rd2 + 8];\n\t"
+		"xor.b64  	rd8, rd6, rd7;\n\t"
+		"st.u64[rd1 + 8], rd8;\n\t"
+		"ret;\n\t"
+		"}":: "l"(x), "l"(y));
+	*/
 }
 
 
