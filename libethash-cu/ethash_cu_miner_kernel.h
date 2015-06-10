@@ -3,6 +3,11 @@
 
 typedef unsigned long long int ulong;
 typedef unsigned int  uint;
+typedef union
+{
+	ulong ulongs[16 / sizeof(ulong)];
+	uint  uints[16 / sizeof(uint)];
+} hash16_t;
 
 typedef union
 {
@@ -20,7 +25,8 @@ typedef union
 
 typedef union
 {
-	uint uints[128 / sizeof(uint)]; 
+	uint		uints[128 / sizeof(uint)]; 
+	hash16_t	h16s[128 / sizeof(hash16_t)];
 } hash128_t;
 
 //typedef uint hash128_t;

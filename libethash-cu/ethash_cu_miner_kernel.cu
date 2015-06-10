@@ -109,10 +109,16 @@ __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_si
 
 #define fnv(x,y) ((x) * FNV_PRIME ^(y))
 
-__device__ void fnv4(uint * x, const uint * y)
+__device__ void fnv4(hash16_t * x, const hash16_t * y)
 {
-	for (uint i = 0; i < 4; i++)
-		x[i] = fnv(x[i], y[i]);
+	//for (uint i = 0; i < 4; i++)
+	//	x[i] = fnv(x[i], y[i]);
+	x->uints[0] *= FNV_PRIME;
+	x->uints[1] *= FNV_PRIME;
+	x->uints[2] *= FNV_PRIME;
+	x->uints[3] *= FNV_PRIME;
+	x->ulongs[0] ^= y->ulongs[0];
+	x->ulongs[1] ^= y->ulongs[1];
 }
 
 
@@ -147,17 +153,17 @@ __device__ hash64_t init_hash(hash32_t const* header, ulong nonce)
 	return init;
 }
 
-__device__ uint inner_loop(uint* mix, uint thread_id, uint* share, hash128_t const* g_dag)
+__device__ uint inner_loop(hash16_t * mix, uint thread_id, uint* share, hash128_t const* g_dag)
 {
 	// share init0
 	if (thread_id == 0)
-		*share = mix[0];
+		*share = mix->uints[0];
 	//__syncthreads();
 	uint init0 = *share;
 	
 	uint a = 0;
-	uint t4 = thread_id << 2;
-
+	//uint t4 = thread_id << 2;
+	//uint t2 = thread_id << 1;
 	do
 	{
 		
@@ -169,17 +175,18 @@ __device__ uint inner_loop(uint* mix, uint thread_id, uint* share, hash128_t con
 			
 			if (update_share)
 			{
-				*share = fnv(init0 ^ (a + i), mix[i]) % d_dag_size;
+				*share = fnv(init0 ^ (a + i), mix->uints[i]) % d_dag_size;
 			}
 			//__syncthreads();
 			__threadfence_block();
 			//fnv4(mix, &(g_dag[*share+t4]));
-			fnv4(mix, &(g_dag[*share].uints[t4]));
+			//fnv4(mix, &(g_dag[*share].ulongs[t4]));
+			//fnv4(mix, &(g_dag[*share].h16s[thread_id]));
 		}
 		
 	} while ((a += 4) != ACCESSES);// d_acceses);
 	
-	return fnv_reduce(mix);
+	return fnv_reduce(mix->uints);
 }
 
 __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
@@ -236,16 +243,20 @@ __device__ hash32_t compute_hash(
 	hash32_t mix;
 	uint i = 0;
 	//uint t4 = 4 * (thread_id & 3);
-	const uint * thread_init = &(share[hash_id].init.uints[(thread_id & 3) << 2]);
-
+	//const uint * thread_init = &(share[hash_id].init.uints[(thread_id & 3) << 2]);
+	const ulong * thread_init = &(share[hash_id].init.ulongs[(thread_id & 3) << 1]);
 	do
 	{
 		// share init with other threads
 		if (i == thread_id)
 			share[hash_id].init = init;
 
-		uint t[4] = { thread_init[0], thread_init[1], thread_init[2], thread_init[3] };
-		uint thread_mix = inner_loop(t, thread_id, share[hash_id].mix.uints, g_dag);
+		//uint t[4] = { thread_init[0], thread_init[1], thread_init[2], thread_init[3] };
+		hash16_t h16;
+		h16.ulongs[0] = thread_init[0];
+		h16.ulongs[1] = thread_init[1];
+
+		uint thread_mix = inner_loop(&h16, thread_id, share[hash_id].mix.uints, g_dag);
 
 		share[hash_id].mix.uints[thread_id] = thread_mix;
 
