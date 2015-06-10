@@ -417,6 +417,8 @@ private:
 			f.startCPU();
 		else if (_m == MinerType::GPU)
 			f.startGPU();
+		else if (_m == MinerType::CUDA)
+			f.startCUDA();
 
 		ProofOfWork::WorkPackage current;
 		EthashAux::FullType dag;
