@@ -11,7 +11,7 @@
 #include "device_functions.h"
 #include "vector_types.h"
 
-#define GROUP_SIZE 32
+#define GROUP_SIZE 64
 #define ACCESSES 64
 #define THREADS_PER_HASH (128 / 16)
 #define HASHES_PER_LOOP (GROUP_SIZE / THREADS_PER_HASH)

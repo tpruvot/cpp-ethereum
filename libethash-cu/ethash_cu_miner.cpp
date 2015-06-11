@@ -145,7 +145,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	}
 
 	// use requested workgroup size, but we require multiple of 8
-	m_workgroup_size = ((workgroup_size + 7) / 8) * 8;
+	m_workgroup_size = 64;// ((workgroup_size + 7) / 8) * 8;
 
 	// patch source code
 	cudaError result;
