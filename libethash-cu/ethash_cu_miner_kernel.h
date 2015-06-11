@@ -19,14 +19,14 @@ typedef union
 typedef union
 {
 	ulong ulongs[64 / sizeof(ulong)];
-	uint  uints[64 / sizeof(uint)];
+	uint4  uint4s[64 / sizeof(uint4)];
 } hash64_t;
 
 
 typedef union
 {
-	uint		uints[128 / sizeof(uint)]; 
-	hash16_t	h16s[128 / sizeof(hash16_t)];
+
+	uint4	uint4s[128 / sizeof(uint4)];
 } hash128_t;
 
 //typedef uint hash128_t;

@@ -155,51 +155,19 @@ __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_si
 
 #define fnv(x,y) ((x) * FNV_PRIME ^(y))
 
-__device__ void fnv4(hash16_t * x, const hash16_t * y)
+__device__ uint4 fnv4(uint4 a, uint4 b)
 {
-	
-	x->uints[0] *= FNV_PRIME;
-	x->uints[1] *= FNV_PRIME;
-	x->uints[2] *= FNV_PRIME;
-	x->uints[3] *= FNV_PRIME;
-	x->ulongs[0] ^= y->ulongs[0];
-	x->ulongs[1] ^= y->ulongs[1];
-	
-	/*
-	asm("{\n\t"
-		".reg.s32 	r<9>;\n\t"
-		".reg.s64 	rd<9>;\n\t"
-		"ld.param.u64 	rd1, [%0];\n\t"
-		"ld.param.u64 	rd2, [%1];\n\t"
-		"ld.u32 	r1, [rd1];\n\t"
-		"mul.lo.s32 	r2, r1, 16777619;\n\t"
-		"ld.u32 	r3, [rd1 + 4];\n\t"
-		"ld.u32 	r4, [rd1 + 8];\n\t"
-		"ld.u32 	r5, [rd1 + 12];\n\t"
-		"st.u32[rd1], r2;\n\t"
-		"mul.lo.s32 	r6, r3, 16777619;\n\t"
-		"st.u32[rd1 + 4], r6;\n\t"
-		"mul.lo.s32 	r7, r4, 16777619;\n\t"
-		"st.u32[rd1 + 8], r7;\n\t"
-		"mul.lo.s32 	r8, r5, 16777619;\n\t"
-		"st.u32[%rd1 + 12], r8;\n\t"
-		"ld.u64 	rd3, [rd2];\n\t"
-		"ld.u64 	rd4, [rd1];\n\t"
-		"xor.b64  	rd5, rd4, rd3;\n\t"
-		"ld.u64 	rd6, [rd1 + 8];\n\t"
-		"st.u64[rd1], rd5;\n\t"
-		"ld.u64 	rd7, [rd2 + 8];\n\t"
-		"xor.b64  	rd8, rd6, rd7;\n\t"
-		"st.u64[rd1 + 8], rd8;\n\t"
-		"ret;\n\t"
-		"}":: "l"(x), "l"(y));
-	*/
+	uint4 c;
+	c.x = a.x * FNV_PRIME ^ b.x;	
+	c.y = a.y * FNV_PRIME ^ b.y;
+	c.z = a.z * FNV_PRIME ^ b.z;
+	c.w = a.w * FNV_PRIME ^ b.w;
+	return c;
 }
 
-
-__device__ uint  fnv_reduce(uint * v)
+__device__ uint fnv_reduce(uint4 v)
 {
-	return fnv(fnv(fnv(v[0], v[1]), v[2]), v[3]);
+	return fnv(fnv(fnv(v.x, v.y), v.z), v.w);
 }
 
 __device__ hash64_t init_hash(hash32_t const* header, ulong nonce)
@@ -228,17 +196,16 @@ __device__ hash64_t init_hash(hash32_t const* header, ulong nonce)
 	return init;
 }
 
-__device__ uint inner_loop(hash16_t * mix, uint thread_id, uint* share, hash128_t const* g_dag)
+__device__ uint inner_loop(uint4 mix, uint thread_id, uint* share, hash128_t const* g_dag)
 {
 	// share init0
 	if (thread_id == 0)
-		*share = mix->uints[0];
+		*share = mix.x;
 	//__syncthreads();
 	uint init0 = *share;
 	
 	uint a = 0;
-	//uint t4 = thread_id << 2;
-	//uint t2 = thread_id << 1;
+
 	do
 	{
 		
@@ -250,18 +217,18 @@ __device__ uint inner_loop(hash16_t * mix, uint thread_id, uint* share, hash128_
 			
 			if (update_share)
 			{
-				*share = fnv(init0 ^ (a + i), mix->uints[i]) % d_dag_size;
+				uint m[4] = { mix.x, mix.y, mix.z, mix.w };
+				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
 			}
 			//__syncthreads();
 			__threadfence_block();
-			//fnv4(mix, &(g_dag[*share+t4]));
-			//fnv4(mix, &(g_dag[*share].ulongs[t4]));
-			fnv4(mix, &(g_dag[*share].h16s[thread_id]));
+
+			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
 		}
 		
 	} while ((a += 4) != ACCESSES);// d_acceses);
 	
-	return fnv_reduce(mix->uints);
+	return fnv_reduce(mix);
 }
 
 __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
@@ -317,21 +284,16 @@ __device__ hash32_t compute_hash(
 
 	hash32_t mix;
 	uint i = 0;
-	//uint t4 = 4 * (thread_id & 3);
-	//const uint * thread_init = &(share[hash_id].init.uints[(thread_id & 3) << 2]);
-	const ulong * thread_init = &(share[hash_id].init.ulongs[(thread_id & 3) << 1]);
+	
 	do
 	{
 		// share init with other threads
 		if (i == thread_id)
 			share[hash_id].init = init;
 
-		//uint t[4] = { thread_init[0], thread_init[1], thread_init[2], thread_init[3] };
-		hash16_t h16;
-		h16.ulongs[0] = thread_init[0];
-		h16.ulongs[1] = thread_init[1];
+		uint4 thread_init = share[hash_id].init.uint4s[(thread_id & 3)];
 
-		uint thread_mix = inner_loop(&h16, thread_id, share[hash_id].mix.uints, g_dag);
+		uint thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uints, g_dag);
 
 		share[hash_id].mix.uints[thread_id] = thread_mix;
 
@@ -352,7 +314,7 @@ __global__ void ethash_search(
 	ulong target
 	)
 {
-	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];// = new compute_hash_share[d_workgroup_size / THREADS_PER_HASH];
+	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];
 	
 	uint const gid = blockIdx.x * blockDim.x + threadIdx.x;
 	
