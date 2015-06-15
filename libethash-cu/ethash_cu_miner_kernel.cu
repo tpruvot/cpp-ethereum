@@ -6,12 +6,12 @@
 
 #include "ethash_cu_miner_kernel.h"
 #include "ethash_cu_miner_kernel_globals.h"
-//#include "rotl64.cuh"
+#include "rotl64.cuh"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
 #include "vector_types.h"
 
-#define GROUP_SIZE 64
+#define GROUP_SIZE 512
 #define ACCESSES 64
 #define THREADS_PER_HASH (128 / 16)
 #define HASHES_PER_LOOP (GROUP_SIZE / THREADS_PER_HASH)
@@ -28,55 +28,7 @@ __device__ __constant__ ulong const keccak_round_constants[24] = {
 	0x000000000000800AULL, 0x800000008000000AULL, 0x8000000080008081ULL,
 	0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL
 };
-/*
-__device__ ulong ROTL64(const ulong x, const int offset)
-{
-	ulong res;
-	asm("{\n\t"
-		".reg .u32 tl,th,vl,vh;\n\t"
-		".reg .pred p;\n\t"
-		"mov.b64 {tl,th}, %1;\n\t"
-		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
-		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
-		"setp.lt.u32 p, %2, 32;\n\t"
-		"@!p mov.b64 %0, {vl,vh};\n\t"
-		"@p  mov.b64 %0, {vh,vl};\n\t"
-		"}"
-		: "=l"(res) : "l"(x), "r"(offset)
-		);
-	return res;
-}
-*/
 
-__device__ ulong ROTL64H(const ulong x, const int offset)
-{
-	ulong res;
-	asm("{\n\t"
-		".reg .u32 tl,th,vl,vh;\n\t"
-		"mov.b64 {tl,th}, %1;\n\t"
-		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
-		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
-		"mov.b64 %0, {vl,vh};\n\t"
-		"}"
-		: "=l"(res) : "l"(x), "r"(offset)
-		);
-	return res;
-}
-
-__device__ ulong ROTL64L(const ulong x, const int offset)
-{
-	ulong res;
-	asm("{\n\t"
-		".reg .u32 tl,th,vl,vh;\n\t"
-		"mov.b64 {tl,th}, %1;\n\t"
-		"shf.l.wrap.b32 vl, tl, th, %2;\n\t"
-		"shf.l.wrap.b32 vh, th, tl, %2;\n\t"
-		"mov.b64 %0, {vh,vl};\n\t"
-		"}"
-		: "=l"(res) : "l"(x), "r"(offset)
-		);
-	return res;
-}
 __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_size, uint out_size)
 {
 	ulong t[5], u, v;

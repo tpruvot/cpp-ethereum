@@ -372,15 +372,12 @@ private:
 			cout << rate << endl;
 			results[rate] = mp;
 			mean += rate;
+			if (i > 0 && i < _trials - 1)
+				innerMean += rate;
 		}
 		f.stop();
-		int j = -1;
-		for (auto const& r: results)
-			if (++j > 0 && j < (int)_trials - 1)
-				innerMean += r.second.rate();
-		innerMean /= (_trials - 2);
 		cout << "min/mean/max: " << results.begin()->second.rate() << "/" << (mean / _trials) << "/" << results.rbegin()->second.rate() << " H/s" << endl;
-		cout << "inner mean: " << innerMean << " H/s" << endl;
+		cout << "inner mean: " << (innerMean / (_trials-2)) << " H/s" << endl;
 
 		(void)_phoneHome;
 #if ETH_JSONRPC || !ETH_TRUE

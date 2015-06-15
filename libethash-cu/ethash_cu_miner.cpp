@@ -145,7 +145,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	}
 
 	// use requested workgroup size, but we require multiple of 8
-	m_workgroup_size = 64;// ((workgroup_size + 7) / 8) * 8;
+	m_workgroup_size = 128;// ((workgroup_size + 7) / 8) * 8;
 
 	// patch source code
 	cudaError result;
@@ -159,7 +159,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	// create buffer for dag
 	result = cudaMalloc(&m_dag_ptr, _dagSize);
 
-	// create buffer for header
+	// create buffer for header256
 	result = cudaMalloc(&m_header, 32);
 
 	// copy dag to CPU.
@@ -327,7 +327,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 			// reset search buffer if we're still going
 			if (num_found)
-				cudaMemcpy(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice);
+				cudaMemcpyAsync(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice, m_streams[buf]);
 
 			pending.pop();
 		}
