@@ -1,14 +1,39 @@
 set(EXECUTABLE ethash-cu)
 
-aux_source_directory(. SRC_LIST )
-file(GLOB HEADERS "*.h")
+FIND_PACKAGE(CUDA REQUIRED)
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-O3 -gencode arch compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_52,code=compute_52)
+file(GLOB SRC_LIST "*.cpp" "*.cu")
+file(GLOB HEADERS "*.h" "*.cuh")
+
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-O3;--ptxas-options=-v;-use_fast_math)
+if(COMPUTE)
+	if(NOT MAXREGCOUNT)
+		if(COMPUTE GREATER 30)
+		 SET(MAXREGCOUNT 72)
+		elseif(COMPUTE LESS 20)
+		 SET(MAXREGCOUNT 72)
+		else(COMPUTE GREATER 30)
+		 SET(MAXREGCOUNT 63) 
+		endif(COMPUTE GREATER 30)		
+	endif(NOT MAXREGCOUNT)
+	#SET(MAGREGCOUNTFLAG "-maxrregcount=${MAXREGCOUNT}")
+	LIST(APPEND CUDA_NVCC_FLAGS -maxrregcount=${MAXREGCOUNT})
+	#SET(GENCODE "-gencode arch=compute_${COMPUTE},code=sm_${COMPUTE}")
+	LIST(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_${COMPUTE},code=sm_${COMPUTE})
+else(COMPUTE)
+	if(NOT MAXREGCOUNT)
+		SET(MAXREGCOUNT 72)
+	endif(NOT MAXREGCOUNT)
+	#SET(MAGREGCOUNTFLAG "-maxrregcount=${MAXREGCOUNT}")
+	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-maxrregcount=${MAXREGCOUNT};-gencode arch=compute_20,code=sm_20;-gencode arch=compute_30,code=sm_30;-gencode arch=compute_32,code=sm_32;-gencode arch=compute_35,code=sm_35;-gencode arch=compute_50,code=sm_50;-gencode arch=compute_52,code=sm_52)
+endif(COMPUTE)
+
+
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(..)
-add_library(${EXECUTABLE} ${SRC_LIST} ${HEADERS})
+CUDA_ADD_LIBRARY(${EXECUTABLE} STATIC ${SRC_LIST} ${HEADERS})
 TARGET_LINK_LIBRARIES(${EXECUTABLE} ${CUDA_LIBRARIES} ethash)
 
 install( TARGETS ${EXECUTABLE} RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib )
