@@ -36,7 +36,7 @@ __device__ ulong ROTL64L(const ulong x, const int offset)
 		);
 	return res;
 }
-#elif __CUDA_ARCH__ >= 120 && USE_ROT_ASM_OPT == 2
+#elif __CUDA_ARCH__ >= 120
 
 #define ROTL64H(x, n) ROTL64(x,n)
 #define ROTL64L(x, n) ROTL64(x,n)
