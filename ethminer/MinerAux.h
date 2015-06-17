@@ -247,6 +247,39 @@ public:
 				throw BadArgument();
 			}
 		}
+		else if (arg == "--gpu-mining-buffers"  && i + 1 < argc)
+		{
+			try {
+				gpuMiningBuffers = stol(argv[++i]);
+			}
+			catch (...)
+			{
+				cerr << "Bad " << arg << " option: " << argv[i] << endl;
+				throw BadArgument();
+			}
+		}
+		else if (arg == "--gpu-batch-size"  && i + 1 < argc)
+		{
+			try {
+				gpuBatchSize = 1 << stol(argv[++i]);
+			}
+			catch (...)
+			{
+				cerr << "Bad " << arg << " option: " << argv[i] << endl;
+				throw BadArgument();
+			}
+		}
+		else if (arg == "--gpu-workgroup-size"  && i + 1 < argc)
+		{
+			try {
+				gpuWorkgroupSize = ((stol(argv[++i]) + 7) / 8) * 8;
+			}
+			catch (...)
+			{
+				cerr << "Bad " << arg << " option: " << argv[i] << endl;
+				throw BadArgument();
+			}
+		}
 		else
 			return false;
 		return true;
@@ -267,6 +300,7 @@ public:
 			ProofOfWork::CUDAMiner::setDefaultPlatform(openclPlatform);
 			ProofOfWork::CUDAMiner::setDefaultDevice(openclDevice);
 			ProofOfWork::CUDAMiner::setNumInstances(miningThreads);
+			ProofOfWork::CUDAMiner::setKernelParameters(gpuMiningBuffers, gpuBatchSize, gpuWorkgroupSize);
 		}
 		if (mode == OperationMode::DAGInit)
 			doInitDAG(initDAG);
@@ -305,6 +339,10 @@ public:
 			<< "    --opencl-platform <n>  When mining using -G/--opencl use OpenCL platform n (default: 0)." << endl
 			<< "    --opencl-device <n>  When mining using -G/--opencl use OpenCL device n (default: 0)." << endl
 			<< "    -t, --mining-threads <n> Limit number of CPU/GPU miners to n (default: all CPU threads / 1 GPU)" << endl
+			<< "	--gpu-mining-buffers <n> Number of GPU mining buffers (default: 2)" << endl
+			<< "	--gpu-batch-size <n> Mining batch size as a power of 2 (default: 18 => 262144)" << endl
+			<< "	--gpu-workgroup-size <n> Mining workgroup size (opencl) / threads per block (CUDA). Should be multiple of 8. (default: 64)." << endl 
+
 			;
 	}
 
@@ -494,6 +532,9 @@ private:
 	unsigned openclPlatform = 0;
 	unsigned openclDevice = 0;
 	unsigned miningThreads = UINT_MAX;
+	unsigned gpuMiningBuffers = 2;
+	unsigned gpuBatchSize = 1 << 18;
+	unsigned gpuWorkgroupSize = 64;
 
 	/// DAG initialisation param.
 	unsigned initDAG = 0;

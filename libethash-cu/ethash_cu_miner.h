@@ -32,7 +32,7 @@ public:
 public:
 	ethash_cu_miner();
 
-	bool init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size = 64, unsigned _deviceId = 0);
+	bool init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_buffers = 2, unsigned search_batch_size = 262144, unsigned workgroup_size = 64, unsigned _deviceId = 0);
 	static std::string platform_info(unsigned _deviceId = 0);
 	static int get_num_devices();
 
@@ -42,8 +42,12 @@ public:
 	void search(uint8_t const* header, uint64_t target, search_hook& hook);
 
 private:
-	enum { c_max_search_results = 1, c_num_buffers = 1, c_hash_batch_size = 1024, c_search_batch_size = 131072 };
+	enum { c_max_search_results = 1, c_num_buffers = 4, c_hash_batch_size = 1024, c_search_batch_size = 262144*2 };
 	
+	unsigned m_num_buffers;
+	unsigned m_search_batch_size;
+	unsigned m_workgroup_size;
+
 	hash128_t * m_dag_ptr;
 	hash32_t * m_header;
 
@@ -51,5 +55,5 @@ private:
 	uint * m_search_buf[c_num_buffers];
 	cudaStream_t  m_streams[c_num_buffers];
 
-	unsigned m_workgroup_size;
+	
 };

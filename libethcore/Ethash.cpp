@@ -289,6 +289,10 @@ unsigned Ethash::GPUMiner::s_platformId = 0;
 unsigned Ethash::GPUMiner::s_deviceId = 0;
 unsigned Ethash::GPUMiner::s_numInstances = 0;
 
+unsigned Ethash::GPUMiner::s_miningBuffers = 2;
+unsigned Ethash::GPUMiner::s_batchSize = 1 << 18;
+unsigned Ethash::GPUMiner::s_workgroupSize = 64;
+
 Ethash::GPUMiner::GPUMiner(ConstructionInfo const& _ci):
 	Miner(_ci),
 	Worker("gpuminer" + toString(index())),
@@ -443,6 +447,10 @@ private:
 unsigned Ethash::CUDAMiner::s_deviceId = 0;
 unsigned Ethash::CUDAMiner::s_numInstances = 1;
 
+unsigned Ethash::CUDAMiner::s_miningBuffers = 2;
+unsigned Ethash::CUDAMiner::s_batchSize = 1 << 18;
+unsigned Ethash::CUDAMiner::s_workgroupSize = 64;
+
 Ethash::CUDAMiner::CUDAMiner(ConstructionInfo const& _ci) :
 Miner(_ci),
 Worker("cudaminer" + toString(index())),
@@ -505,7 +513,7 @@ void Ethash::CUDAMiner::workLoop()
 				this_thread::sleep_for(chrono::milliseconds(500));
 			}
 			bytesConstRef dagData = dag->data();
-			m_miner->init(dagData.data(), dagData.size(), 32, device);
+			m_miner->init(dagData.data(), dagData.size(), s_miningBuffers, s_batchSize, s_workgroupSize, device);
 		}
 
 		uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)w.boundary >> 192);

@@ -121,7 +121,12 @@ public:
 		static void setDefaultPlatform(unsigned _id) { s_platformId = _id; }
 		static void setDefaultDevice(unsigned _id) { s_deviceId = _id; }
 		static void setNumInstances(unsigned _instances) { s_numInstances = std::min<unsigned>(_instances, getNumDevices()); }
-
+		static void setKernelParameters(unsigned _miningBuffers, unsigned _batchSize, unsigned _workgroupSize)
+		{
+			s_miningBuffers = _miningBuffers;
+			s_batchSize = _batchSize;
+			s_workgroupSize = _workgroupSize;
+		}
 	protected:
 		void kickOff() override;
 		void pause() override;
@@ -139,6 +144,9 @@ public:
 		static unsigned s_platformId;
 		static unsigned s_deviceId;
 		static unsigned s_numInstances;
+		static unsigned s_miningBuffers;
+		static unsigned s_batchSize;
+		static unsigned s_workgroupSize;
 	};
 #else
 	using GPUMiner = CPUMiner;
@@ -159,7 +167,12 @@ public:
 		static void setDefaultPlatform(unsigned) {}
 		static void setDefaultDevice(unsigned _id) { s_deviceId = _id; }
 		static void setNumInstances(unsigned _instances) { s_numInstances = std::min<unsigned>(_instances, getNumDevices()); }
-
+		static void setKernelParameters(unsigned _miningBuffers, unsigned _batchSize, unsigned _workgroupSize)
+		{
+			s_miningBuffers = _miningBuffers;
+			s_batchSize		= _batchSize;
+			s_workgroupSize = _workgroupSize;
+		}
 	protected:
 		void kickOff() override;
 		void pause() override;
@@ -176,6 +189,9 @@ public:
 		h256 m_minerSeed;		///< Last seed in m_miner
 		static unsigned s_deviceId;
 		static unsigned s_numInstances;
+		static unsigned s_miningBuffers;
+		static unsigned s_batchSize;
+		static unsigned s_workgroupSize;
 	};
 #else
 	using CUDAMiner = CPUMiner;

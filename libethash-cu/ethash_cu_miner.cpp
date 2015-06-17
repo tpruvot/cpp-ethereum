@@ -117,7 +117,7 @@ void ethash_cu_miner::finish()
 	cudaDeviceReset();
 }
 
-bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size, unsigned _deviceId)
+bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_buffers, unsigned search_batch_size, unsigned workgroup_size, unsigned _deviceId)
 {
 
 	int device_count = get_num_devices();
@@ -144,8 +144,11 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 		return false;
 	}
 
+	m_num_buffers = num_buffers;
+	m_search_batch_size = search_batch_size;
+
 	// use requested workgroup size, but we require multiple of 8
-	m_workgroup_size = 64;// ((workgroup_size + 7) / 8) * 8;
+	m_workgroup_size = ((workgroup_size + 7) / 8) * 8;
 
 	// patch source code
 	cudaError result;
@@ -170,7 +173,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	}
 
 	// create mining buffers
-	for (unsigned i = 0; i != c_num_buffers; ++i)
+	for (unsigned i = 0; i != m_num_buffers; ++i)
 	{		
 		result = cudaMallocHost(&m_hash_buf[i], 32 * c_hash_batch_size);
 		result = cudaMallocHost(&m_search_buf[i], (c_max_search_results + 1) * sizeof(uint32_t));
@@ -270,7 +273,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	// update header constant buffer
 	cudaMemcpy(m_header, header, 32, cudaMemcpyHostToDevice);
-	for (unsigned i = 0; i != c_num_buffers; ++i)
+	for (unsigned i = 0; i != m_num_buffers; ++i)
 	{
 		cudaMemcpy(m_search_buf[i], &c_zero, 4, cudaMemcpyHostToDevice);
 	}
@@ -285,7 +288,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
 	for (;; start_nonce += c_search_batch_size)
 	{
-		run_ethash_search(c_search_batch_size / m_workgroup_size, m_workgroup_size, m_streams[buf], m_search_buf[buf], m_header, m_dag_ptr, start_nonce, target);
+		run_ethash_search(m_search_batch_size / m_workgroup_size, m_workgroup_size, m_streams[buf], m_search_buf[buf], m_header, m_dag_ptr, start_nonce, target);
 
 		cudaError kerr = cudaGetLastError();
 		if (cudaSuccess != kerr)
@@ -294,10 +297,10 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 		}
 
 		pending.push({start_nonce, buf});
-		buf = (buf + 1) % c_num_buffers;
+		buf = (buf + 1) % m_num_buffers;
 
 		// read results
-		if (pending.size() == c_num_buffers)
+		if (pending.size() == m_num_buffers)
 		{
 			pending_batch const& batch = pending.front();
 
@@ -321,7 +324,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 			}
 			
 			bool exit = num_found && hook.found(nonces, num_found);
-			exit |= hook.searched(batch.start_nonce, c_search_batch_size); // always report searched before exit
+			exit |= hook.searched(batch.start_nonce , m_search_batch_size); // always report searched before exit
 			if (exit)
 				break;
 
