@@ -128,7 +128,7 @@ void ethash_cl_miner::finish()
 		m_queue.finish();
 }
 
-bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size, unsigned _platformId, unsigned _deviceId)
+bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_buffers, unsigned search_batch_size, unsigned workgroup_size, unsigned _platformId, unsigned _deviceId)
 {
 	// get all platforms
 	std::vector<cl::Platform> platforms;
@@ -170,6 +170,12 @@ bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	// create context
 	m_context = cl::Context(std::vector<cl::Device>(&device, &device + 1));
 	m_queue = cl::CommandQueue(m_context, device);
+
+	m_num_buffers = num_buffers;
+	m_search_batch_size = search_batch_size;
+
+	m_hash_buf = new cl::Buffer[m_num_buffers];
+	m_search_buf = new cl::Buffer[m_num_buffers];
 
 	// use requested workgroup size, but we require multiple of 8
 	m_workgroup_size = ((workgroup_size + 7) / 8) * 8;
@@ -218,7 +224,7 @@ bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	}
 
 	// create mining buffers
-	for (unsigned i = 0; i != c_num_buffers; ++i)
+	for (unsigned i = 0; i != m_num_buffers; ++i)
 	{
 		m_hash_buf[i] = cl::Buffer(m_context, CL_MEM_WRITE_ONLY | (!m_opencl_1_1 ? CL_MEM_HOST_READ_ONLY : 0), 32*c_hash_batch_size);
 		m_search_buf[i] = cl::Buffer(m_context, CL_MEM_WRITE_ONLY, (c_max_search_results + 1) * sizeof(uint32_t));
@@ -276,11 +282,11 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 		
 			pending.push({i, this_count, buf});
 			i += this_count;
-			buf = (buf + 1) % c_num_buffers;
+			buf = (buf + 1) % m_num_buffers;
 		}
 
 		// read results
-		if (i == count || pending.size() == c_num_buffers)
+		if (i == count || pending.size() == m_num_buffers)
 		{
 			pending_batch const& batch = pending.front();
 
@@ -308,7 +314,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	// update header constant buffer
 	m_queue.enqueueWriteBuffer(m_header, false, 0, 32, header);
-	for (unsigned i = 0; i != c_num_buffers; ++i)
+	for (unsigned i = 0; i != m_num_buffers; ++i)
 		m_queue.enqueueWriteBuffer(m_search_buf[i], false, 0, 4, &c_zero);
 
 #if CL_VERSION_1_2 && 0
@@ -340,20 +346,20 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 	unsigned buf = 0;
 	std::random_device engine;
 	uint64_t start_nonce = 0;// std::uniform_int_distribution<uint64_t>()(engine);
-	for (; ; start_nonce += c_search_batch_size)
+	for (; ; start_nonce += m_search_batch_size)
 	{
 		// supply output buffer to kernel
 		m_search_kernel.setArg(0, m_search_buf[buf]);
 		m_search_kernel.setArg(3, start_nonce);
 
 		// execute it!
-		m_queue.enqueueNDRangeKernel(m_search_kernel, cl::NullRange, c_search_batch_size, m_workgroup_size);
+		m_queue.enqueueNDRangeKernel(m_search_kernel, cl::NullRange, m_search_batch_size, m_workgroup_size);
 		
 		pending.push({start_nonce, buf});
-		buf = (buf + 1) % c_num_buffers;
+		buf = (buf + 1) % m_num_buffers;
 
 		// read results
-		if (pending.size() == c_num_buffers)
+		if (pending.size() == m_num_buffers)
 		{
 			pending_batch const& batch = pending.front();
 
@@ -370,7 +376,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 			m_queue.enqueueUnmapMemObject(m_search_buf[batch.buf], results);
 			
 			bool exit = num_found && hook.found(nonces, num_found);
-			exit |= hook.searched(batch.start_nonce, c_search_batch_size); // always report searched before exit
+			exit |= hook.searched(batch.start_nonce, m_search_batch_size); // always report searched before exit
 			if (exit)
 				break;
 

@@ -352,7 +352,7 @@ void Ethash::GPUMiner::workLoop()
 				this_thread::sleep_for(chrono::milliseconds(500));
 			}
 			bytesConstRef dagData = dag->data();
-			m_miner->init(dagData.data(), dagData.size(), 32, s_platformId, device);
+			m_miner->init(dagData.data(), dagData.size(), s_miningBuffers, s_batchSize, s_workgroupSize, s_platformId, device);
 		}
 
 		uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)w.boundary >> 192);

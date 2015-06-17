@@ -294,6 +294,7 @@ public:
 			ProofOfWork::GPUMiner::setDefaultPlatform(openclPlatform);
 			ProofOfWork::GPUMiner::setDefaultDevice(openclDevice);
 			ProofOfWork::GPUMiner::setNumInstances(miningThreads);
+			ProofOfWork::GPUMiner::setKernelParameters(gpuMiningBuffers, gpuBatchSize, gpuWorkgroupSize);
 		}
 		else if (m_minerType == MinerType::CUDA)
 		{

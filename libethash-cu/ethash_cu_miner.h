@@ -42,7 +42,7 @@ public:
 	void search(uint8_t const* header, uint64_t target, search_hook& hook);
 
 private:
-	enum { c_max_search_results = 1, c_num_buffers = 4, c_hash_batch_size = 1024, c_search_batch_size = 262144*2 };
+	enum { c_max_search_results = 1, c_hash_batch_size = 1024 };
 	
 	unsigned m_num_buffers;
 	unsigned m_search_batch_size;
@@ -51,9 +51,9 @@ private:
 	hash128_t * m_dag_ptr;
 	hash32_t * m_header;
 
-	void * m_hash_buf[c_num_buffers];
-	uint * m_search_buf[c_num_buffers];
-	cudaStream_t  m_streams[c_num_buffers];
+	void ** m_hash_buf;
+	uint ** m_search_buf;
+	cudaStream_t  * m_streams;
 
 	
 };
