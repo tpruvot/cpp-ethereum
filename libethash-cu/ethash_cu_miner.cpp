@@ -310,7 +310,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 			uint32_t results[1 + c_max_search_results];
 			//cudaError err = cudaMemcpy(results, m_search_buf[batch.buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-			cudaError err = cudaMemcpyAsync(results, m_search_buf[batch.buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyHostToHost, m_streams[buf]);
+			cudaError err = cudaMemcpyAsync(results, m_search_buf[batch.buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyHostToHost, m_streams[batch.buf]);
 
 			if (cudaSuccess != err) 
 			{
@@ -334,7 +334,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 			// reset search buffer if we're still going
 			if (num_found)
-				cudaMemcpyAsync(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice, m_streams[buf]);
+				cudaMemcpyAsync(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice, m_streams[batch.buf]);
 
 			pending.pop();
 		}
