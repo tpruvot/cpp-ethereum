@@ -148,7 +148,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	m_search_batch_size = search_batch_size;
 
 	m_hash_buf	 = new void *[m_num_buffers];
-	m_search_buf = new uint *[m_num_buffers];
+	m_search_buf = new uint32_t *[m_num_buffers];
 	m_streams    = new cudaStream_t[m_num_buffers];
 
 	// use requested workgroup size, but we require multiple of 8
@@ -157,7 +157,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	// patch source code
 	cudaError result;
 
-	uint dagSize128 = (unsigned)(_dagSize / ETHASH_MIX_BYTES);
+	uint32_t dagSize128 = (unsigned)(_dagSize / ETHASH_MIX_BYTES);
 	unsigned acceses = ETHASH_ACCESSES;
 	unsigned max_outputs = c_max_search_results;
 

@@ -18,7 +18,7 @@
 
 #define FNV_PRIME	0x01000193
 
-__device__ __constant__ ulong const keccak_round_constants[24] = {
+__device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
 	0x8000000080008000ULL, 0x000000000000808BULL, 0x0000000080000001ULL,
 	0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008AULL,
@@ -29,9 +29,9 @@ __device__ __constant__ ulong const keccak_round_constants[24] = {
 	0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL
 };
 
-__device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_size, uint out_size)
+__device__ static void keccak_f1600_block(uint64_t* s, uint32_t out_size)//, uint32_t in_size, uint32_t out_size)
 {
-	ulong t[5], u, v;
+	uint64_t t[5], u, v;
 	
 	for (size_t i = 0; i < 24; i++) {
 		/* theta: c = a[0,i] ^ a[1,i] ^ .. a[4,i] */
@@ -101,7 +101,7 @@ __device__ static void keccak_f1600_block(ulong* s, uint out_size)//, uint in_si
 	}
 }
 
-#define copy(dst, src, count) for (uint i = 0; i < count; i++) { (dst)[i] = (src)[i]; }
+#define copy(dst, src, count) for (uint32_t i = 0; i < count; i++) { (dst)[i] = (src)[i]; }
 
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
@@ -117,46 +117,46 @@ __device__ uint4 fnv4(uint4 a, uint4 b)
 	return c;
 }
 
-__device__ uint fnv_reduce(uint4 v)
+__device__ uint32_t fnv_reduce(uint4 v)
 {
 	return fnv(fnv(fnv(v.x, v.y), v.z), v.w);
 }
 
-__device__ hash64_t init_hash(hash32_t const* header, ulong nonce)
+__device__ hash64_t init_hash(hash32_t const* header, uint64_t nonce)
 {
 	hash64_t init;
-	//uint const init_size = countof(init.ulongs);	//	8
-	//uint const hash_size = countof(header->ulongs);	//	4
+	//uint32_t const init_size = countof(init.uint64s);	//	8
+	//uint32_t const hash_size = countof(header->uint64s);	//	4
 
 	// sha3_512(header .. nonce)
-	ulong state[25];
+	uint64_t state[25];
 
-	copy(state, header->ulongs, 4);
+	copy(state, header->uint64s, 4);
 	state[4] = nonce;
 	state[5] = 0x0000000000000001;
 	state[6] = 0;
 	state[7] = 0;
 	state[8] = 0x8000000000000000;
-	for (uint i = 9; i < 25; i++)
+	for (uint32_t i = 9; i < 25; i++)
 	{
 		state[i] = 0;
 	}
 	
 	keccak_f1600_block(state, 8);// , hash_size + 1, init_size);
 	 
-	copy(init.ulongs, state, 8);
+	copy(init.uint64s, state, 8);
 	return init;
 }
 
-__device__ uint inner_loop(uint4 mix, uint thread_id, uint* share, hash128_t const* g_dag)
+__device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, hash128_t const* g_dag)
 {
 	// share init0
 	if (thread_id == 0)
 		*share = mix.x;
 	//__syncthreads();
-	uint init0 = *share;
+	uint32_t init0 = *share;
 	
-	uint a = 0;
+	uint32_t a = 0;
 
 	do
 	{
@@ -164,12 +164,12 @@ __device__ uint inner_loop(uint4 mix, uint thread_id, uint* share, hash128_t con
 		bool update_share = thread_id == ((a >> 2) & (THREADS_PER_HASH-1));
 
 		//#pragma unroll 4
-		for (uint i = 0; i < 4; i++)
+		for (uint32_t i = 0; i < 4; i++)
 		{
 			
 			if (update_share)
 			{
-				uint m[4] = { mix.x, mix.y, mix.z, mix.w };
+				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
 				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
 			}
 			//__syncthreads();
@@ -185,23 +185,23 @@ __device__ uint inner_loop(uint4 mix, uint thread_id, uint* share, hash128_t con
 
 __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 {
-	ulong state[25];
+	uint64_t state[25];
 
 	hash32_t hash;
-	//uint const hash_size = countof(hash.ulongs);	//	4
-	//uint const init_size = countof(init->ulongs);	//	8
-	//uint const mix_size  = countof(mix->ulongs);	//	4
+	//uint32_t const hash_size = countof(hash.uint64s);	//	4
+	//uint32_t const init_size = countof(init->uint64s);	//	8
+	//uint32_t const mix_size  = countof(mix->uint64s);	//	4
 
 	// keccak_256(keccak_512(header..nonce) .. mix);
-	copy(state, init->ulongs, 8);
-	copy(state + 8, mix->ulongs, 4);
+	copy(state, init->uint64s, 8);
+	copy(state + 8, mix->uint64s, 4);
 	state[12] = 0x0000000000000001;
-	for (uint i = 13; i < 16; i++)
+	for (uint32_t i = 13; i < 16; i++)
 	{
 		state[i] = 0;
 	}
 	state[16] = 0x8000000000000000;
-	for (uint i = 17; i < 25; i++)
+	for (uint32_t i = 17; i < 25; i++)
 	{
 		state[i] = 0;
 	}
@@ -209,7 +209,7 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 	keccak_f1600_block(state,4);// , init_size + mix_size, hash_size);
 
 	// copy out
-	copy(hash.ulongs, state, 4);
+	copy(hash.uint64s, state, 4);
 	return hash;
 }
 
@@ -223,19 +223,19 @@ __device__ hash32_t compute_hash(
 	compute_hash_share* share,
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
-	ulong start_nonce,
-	ulong gid
+	uint64_t start_nonce,
+	uint64_t gid
 	)
 {
 	// Compute one init hash per work item.
 	hash64_t init = init_hash(g_header, start_nonce + gid);
 
 	// Threads work together in this phase in groups of 8.
-	uint const thread_id = gid & (THREADS_PER_HASH-1);
-	uint const hash_id = (gid & (GROUP_SIZE - 1)) >> 3;/// THREADS_PER_HASH;
+	uint32_t const thread_id = gid & (THREADS_PER_HASH-1);
+	uint32_t const hash_id = (gid & (GROUP_SIZE - 1)) >> 3;/// THREADS_PER_HASH;
 
 	hash32_t mix;
-	uint i = 0;
+	uint32_t i = 0;
 	
 	do
 	{
@@ -245,9 +245,9 @@ __device__ hash32_t compute_hash(
 
 		uint4 thread_init = share[hash_id].init.uint4s[(thread_id & 3)];
 
-		uint thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uints, g_dag);
+		uint32_t thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uint32s, g_dag);
 
-		share[hash_id].mix.uints[thread_id] = thread_mix;
+		share[hash_id].mix.uint32s[thread_id] = thread_mix;
 
 		if (i == thread_id)
 			mix = share[hash_id].mix;
@@ -259,20 +259,20 @@ __device__ hash32_t compute_hash(
 }
 
 __global__ void ethash_search(
-	uint* g_output,
+	uint32_t* g_output,
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
-	ulong start_nonce,
-	ulong target
+	uint64_t start_nonce,
+	uint64_t target
 	)
 {
 	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];
 	
-	uint const gid = blockIdx.x * blockDim.x + threadIdx.x;
+	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;
 	
 	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce, gid);
 	
-	if (__brevll(hash.ulongs[0]) < target)
+	if (__brevll(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);
 		g_output[g_output[0]] = gid;
@@ -284,32 +284,32 @@ void run_ethash_hash(
 	hash32_t* g_hashes,
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
-	ulong start_nonce
+	uint64_t start_nonce
 ) 
 {
 }
 
 void run_ethash_search(
-	uint blocks,
-	uint threads,
+	uint32_t blocks,
+	uint32_t threads,
 	cudaStream_t stream,
-	uint* g_output,
+	uint32_t* g_output,
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
-	ulong start_nonce,
-	ulong target
+	uint64_t start_nonce,
+	uint64_t target
 )
 {
 	ethash_search<<<blocks, threads, 0, stream>>>(g_output, g_header, g_dag, start_nonce, target);
 }
 
 cudaError set_constants(
-	uint * dag_size,
-	uint * max_outputs
+	uint32_t * dag_size,
+	uint32_t * max_outputs
 	)
 {
 	cudaError result;
-	result = cudaMemcpyToSymbol(d_dag_size, dag_size, sizeof(uint));
-	result = cudaMemcpyToSymbol(d_max_outputs, max_outputs, sizeof(uint));
+	result = cudaMemcpyToSymbol(d_dag_size, dag_size, sizeof(uint32_t));
+	result = cudaMemcpyToSymbol(d_max_outputs, max_outputs, sizeof(uint32_t));
 	return result;
 }

@@ -7,9 +7,9 @@
 
 #if __CUDA_ARCH__ >= 320
 
-__device__ ulong ROTL64H(const ulong x, const int offset)
+__device__ uint64_t ROTL64H(const uint64_t x, const int offset)
 {
-	ulong res;
+	uint64_t res;
 	asm("{\n\t"
 		".reg .u32 tl,th,vl,vh;\n\t"
 		"mov.b64 {tl,th}, %1;\n\t"
@@ -22,9 +22,9 @@ __device__ ulong ROTL64H(const ulong x, const int offset)
 	return res;
 }
 
-__device__ ulong ROTL64L(const ulong x, const int offset)
+__device__ uint64_t ROTL64L(const uint64_t x, const int offset)
 {
-	ulong res;
+	uint64_t res;
 	asm("{\n\t"
 		".reg .u32 tl,th,vl,vh;\n\t"
 		"mov.b64 {tl,th}, %1;\n\t"
