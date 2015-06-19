@@ -305,15 +305,11 @@ void run_ethash_search(
 
 cudaError set_constants(
 	uint * dag_size,
-	uint * acceses,
-	uint * max_outputs,
-	uint * workgroup_size
+	uint * max_outputs
 	)
 {
 	cudaError result;
 	result = cudaMemcpyToSymbol(d_dag_size, dag_size, sizeof(uint));
-	//result = cudaMemcpyToSymbol(d_acceses, acceses, sizeof(uint));
 	result = cudaMemcpyToSymbol(d_max_outputs, max_outputs, sizeof(uint));
-	//result = cudaMemcpyToSymbol(d_workgroup_size, workgroup_size, sizeof(uint));
 	return result;
 }

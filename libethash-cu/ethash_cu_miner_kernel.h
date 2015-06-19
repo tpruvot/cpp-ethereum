@@ -33,9 +33,7 @@ typedef union
 
 cudaError set_constants(
 	uint * dag_size,
-	uint * acceses,
-	uint * max_outputs,
-	uint * workgroup_size
+	uint * max_outputs
 );
 
 void run_ethash_hash(

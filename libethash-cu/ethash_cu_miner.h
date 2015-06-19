@@ -42,7 +42,7 @@ public:
 	void search(uint8_t const* header, uint64_t target, search_hook& hook);
 
 private:
-	enum { c_max_search_results = 1, c_hash_batch_size = 1024 };
+	enum { c_max_search_results = 63, c_hash_batch_size = 1024 };
 	
 	unsigned m_num_buffers;
 	unsigned m_search_batch_size;

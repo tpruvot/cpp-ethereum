@@ -519,9 +519,9 @@ void Ethash::CUDAMiner::workLoop()
 		uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)w.boundary >> 192);
 		m_miner->search(w.headerHash.data(), upper64OfBoundary, *m_hook);
 	}
-	catch (cl::Error const& _e)
+	catch (std::runtime_error const& _e)
 	{
-		cwarn << "Error GPU mining: " << _e.what() << "(" << _e.err() << ")";
+		cwarn << "Error CUDA mining: " << _e.what();
 	}
 }
 
