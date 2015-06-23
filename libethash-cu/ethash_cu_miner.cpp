@@ -158,7 +158,6 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	cudaError result;
 
 	uint32_t dagSize128 = (unsigned)(_dagSize / ETHASH_MIX_BYTES);
-	unsigned acceses = ETHASH_ACCESSES;
 	unsigned max_outputs = c_max_search_results;
 
 	result = set_constants(&dagSize128, &max_outputs);
@@ -170,12 +169,8 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	result = cudaMalloc(&m_header, 32);
 
 	// copy dag to CPU.
-	{
-		// this is just ducttaped together. it feels overcomplicated for what it does. 
-		const char * data;
-		 result = cudaMemcpy(m_dag_ptr, _dag, _dagSize, cudaMemcpyHostToDevice);
-	}
-
+    result = cudaMemcpy(m_dag_ptr, _dag, _dagSize, cudaMemcpyHostToDevice);
+	
 	// create mining buffers
 	for (unsigned i = 0; i != m_num_buffers; ++i)
 	{		
@@ -193,74 +188,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 
 void ethash_cu_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
 {
-	/*
-	struct pending_batch
-	{
-		unsigned base;
-		unsigned count;
-		unsigned buf;
-	};
-	std::queue<pending_batch> pending;
-	
-	// update header constant buffer
-	m_queue.enqueueWriteBuffer(m_header, true, 0, 32, header);
-
-	/*
-	__kernel void ethash_combined_hash(
-		__global hash32_t* g_hashes,
-		__constant hash32_t const* g_header,
-		__global hash128_t const* g_dag,
-		ulong start_nonce,
-		uint isolate
-		)
-	*/
-
-	/*
-	m_hash_kernel.setArg(1, m_header);
-	m_hash_kernel.setArg(2, m_dag);
-	m_hash_kernel.setArg(3, nonce);
-	m_hash_kernel.setArg(4, ~0u); // have to pass this to stop the compile unrolling the loop
-
-	unsigned buf = 0;
-	for (unsigned i = 0; i < count || !pending.empty(); )
-	{
-		// how many this batch
-		if (i < count)
-		{
-			unsigned const this_count = std::min<unsigned>(count - i, c_hash_batch_size);
-			unsigned const batch_count = std::max<unsigned>(this_count, m_workgroup_size);
-
-			// supply output hash buffer to kernel
-			m_hash_kernel.setArg(0, m_hash_buf[buf]);
-
-			// execute it!
-			m_queue.enqueueNDRangeKernel(
-				m_hash_kernel,
-				cl::NullRange,
-				cl::NDRange(batch_count),
-				cl::NDRange(m_workgroup_size)
-				);
-			m_queue.flush();
-		
-			pending.push({i, this_count, buf});
-			i += this_count;
-			buf = (buf + 1) % c_num_buffers;
-		}
-
-		// read results
-		if (i == count || pending.size() == c_num_buffers)
-		{
-			pending_batch const& batch = pending.front();
-
-			// could use pinned host pointer instead, but this path isn't that important.
-			uint8_t* hashes = (uint8_t*)m_queue.enqueueMapBuffer(m_hash_buf[batch.buf], true, CL_MAP_READ, 0, batch.count * ETHASH_BYTES);
-			memcpy(ret + batch.base*ETHASH_BYTES, hashes, batch.count*ETHASH_BYTES);
-			m_queue.enqueueUnmapMemObject(m_hash_buf[batch.buf], hashes);
-
-			pending.pop();
-		}
-	}
-	*/
+	// not ported yet
 }
 
 
