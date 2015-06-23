@@ -186,11 +186,12 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	return true;
 }
 
+/*
 void ethash_cu_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
 {
 	// not ported yet
 }
-
+*/
 
 void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
 {
