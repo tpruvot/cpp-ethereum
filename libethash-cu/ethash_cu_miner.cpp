@@ -48,13 +48,6 @@
 
 using namespace std;
 
-static void add_definition(std::string& source, char const* id, unsigned value)
-{
-	char buf[256];
-	sprintf(buf, "#define %s %uu\n", id, value);
-	source.insert(source.begin(), buf, buf + strlen(buf));
-}
-
 ethash_cu_miner::search_hook::~search_hook() {}
 
 ethash_cu_miner::ethash_cu_miner()
