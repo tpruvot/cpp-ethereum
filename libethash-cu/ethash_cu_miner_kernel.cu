@@ -153,7 +153,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 	// share init0
 	if (thread_id == 0)
 		*share = mix.x;
-	//__syncthreads();
+	__syncthreads();
 	uint32_t init0 = *share;
 	
 	uint32_t a = 0;
@@ -172,8 +172,8 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
 				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
 			}
-			//__syncthreads();
-			__threadfence_block();
+			__syncthreads();
+			//__threadfence_block();
 
 			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
 		}
@@ -242,16 +242,16 @@ __device__ hash32_t compute_hash(
 		// share init with other threads
 		if (i == thread_id)
 			share[hash_id].init = init;
-
+		__syncthreads();
 		uint4 thread_init = share[hash_id].init.uint4s[(thread_id & 3)];
-
+		__syncthreads();
 		uint32_t thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uint32s, g_dag);
 
 		share[hash_id].mix.uint32s[thread_id] = thread_mix;
-
+		__syncthreads();
 		if (i == thread_id)
 			mix = share[hash_id].mix;
-
+		__syncthreads();
 	} while (++i != THREADS_PER_HASH );
 
 	return final_hash(&init, &mix);
@@ -268,10 +268,15 @@ __global__ void ethash_search(
 {
 	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];
 	
-	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;
+	uint32_t const gid = 2920; // blockIdx.x * blockDim.x + threadIdx.x;
 	
 	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce, gid);
 	
+	//if (as_ulong(as_uchar8(hash.ulongs[0]).s76543210) < target)
+
+	uint64_t rev = __brevll(hash.uint64s[0]);
+	uint64_t rev2 = __brevll(uint64_t((uint8_t)(hash.uint64s[0])));
+
 	if (__brevll(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);

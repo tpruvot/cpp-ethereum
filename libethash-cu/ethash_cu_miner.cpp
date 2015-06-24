@@ -188,6 +188,13 @@ void ethash_cu_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 
 void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
 {
+	struct pending_batch
+	{
+		uint64_t start_nonce;
+		unsigned buf;
+	};
+	std::queue<pending_batch> pending;
+
 	static uint32_t const c_zero = 0;
 
 	// update header constant buffer
@@ -204,37 +211,49 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	unsigned buf = 0;
 	std::random_device engine;
-	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
+	uint64_t start_nonce = 0;// std::uniform_int_distribution<uint64_t>()(engine);
 	for (;; start_nonce += m_search_batch_size)
 	{
 		run_ethash_search(m_search_batch_size / m_workgroup_size, m_workgroup_size, m_streams[buf], m_search_buf[buf], m_header, m_dag_ptr, start_nonce, target);	
 
+		pending.push({ start_nonce, buf });
 		buf = (buf + 1) % m_num_buffers;
 
-		uint32_t results[1 + c_max_search_results];
-
-		cudaMemcpyAsync(results, m_search_buf[buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyHostToHost, m_streams[buf]);
-			
-		unsigned num_found = std::min<unsigned>(results[0], c_max_search_results);
-		uint64_t nonces[c_max_search_results];
-		for (unsigned i = 0; i != num_found; ++i)
+		// read results
+		if (pending.size() == m_num_buffers)
 		{
-			nonces[i] = start_nonce + results[i + 1];
-		}
+			pending_batch const& batch = pending.front();
+
+			uint32_t results[1 + c_max_search_results];
+
+			cudaMemcpyAsync(results, m_search_buf[batch.buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyHostToHost, m_streams[batch.buf]);
 			
-		bool exit = num_found && hook.found(nonces, num_found);
-		exit |= hook.searched(start_nonce, m_search_batch_size); // always report searched before exit
-		if (exit)
-			break;
+			unsigned num_found = std::min<unsigned>(results[0], c_max_search_results);
+			uint64_t nonces[c_max_search_results];
+			for (unsigned i = 0; i != num_found; ++i)
+			{
+				nonces[i] = batch.start_nonce + results[i + 1];
+				cout << nonces[i] << ", ";
+			}
+			if (num_found > 0)
+				cout << endl;
+			
+			bool exit = num_found && hook.found(nonces, num_found);
+			exit |= hook.searched(batch.start_nonce, m_search_batch_size); // always report searched before exit
+			if (exit)
+				break;
 
-		// reset search buffer if we're still going
-		if (num_found)
-			cudaMemcpyAsync(m_search_buf[buf], &c_zero, 4, cudaMemcpyHostToDevice, m_streams[buf]);
+			start_nonce += m_search_batch_size;
+			// reset search buffer if we're still going
+			if (num_found)
+				cudaMemcpyAsync(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice, m_streams[batch.buf]);
 
-		cudaError err = cudaGetLastError();
-		if (cudaSuccess != err)
-		{
-			throw std::runtime_error(cudaGetErrorString(err));
+			cudaError err = cudaGetLastError();
+			if (cudaSuccess != err)
+			{
+				throw std::runtime_error(cudaGetErrorString(err));
+			}
+			pending.pop();
 		}
 	}	
 }

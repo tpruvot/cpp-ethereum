@@ -86,6 +86,7 @@ public:
 		None,
 		DAGInit,
 		Benchmark,
+		FindSolution,
 		Farm
 	};
 
@@ -236,6 +237,9 @@ public:
 		}
 		else if (arg == "-M" || arg == "--benchmark")
 			mode = OperationMode::Benchmark;
+		else if (arg == "-S" || arg == "--find-solution")
+			mode = OperationMode::FindSolution;
+
 		else if ((arg == "-t" || arg == "--mining-threads") && i + 1 < argc)
 		{
 			try {
@@ -309,6 +313,8 @@ public:
 			doBenchmark(m_minerType, phoneHome, benchmarkWarmup, benchmarkTrial, benchmarkTrials);
 		else if (mode == OperationMode::Farm)
 			doFarm(m_minerType, farmURL, farmRecheckPeriod);
+		else if (mode == OperationMode::FindSolution)
+			doFindSolution(m_minerType);
 	}
 
 	static void streamHelp(ostream& _out)
@@ -366,6 +372,73 @@ private:
 		exit(0);
 	}
 
+	void doFindSolution(MinerType _m, int difficulty = 13)
+	{
+		BlockInfo genesis;
+		genesis.difficulty = 1 << 18;
+		cdebug << genesis.boundary();
+
+		GenericFarm<Ethash> f;
+		f.onSolutionFound([&](ProofOfWork::Solution) { return false; });
+
+		string platformInfo = _m == MinerType::CPU ? ProofOfWork::CPUMiner::platformInfo() : _m == MinerType::GPU ? ProofOfWork::GPUMiner::platformInfo() : _m == MinerType::CUDA ? ProofOfWork::CUDAMiner::platformInfo() : "";
+		cout << "Benchmarking on platform: " << platformInfo << endl;
+
+		cout << "Preparing DAG..." << endl;
+		Ethash::prep(genesis);
+
+		genesis.difficulty = u256(1) << difficulty;
+		genesis.noteDirty();
+		f.setWork(genesis);
+		
+
+		if (_m == MinerType::CPU)
+			f.startCPU();
+		else if (_m == MinerType::GPU)
+			f.startGPU();
+		else if (_m == MinerType::CUDA)
+			f.startCUDA();
+		
+		EthashAux::FullType dag;
+
+		ProofOfWork::WorkPackage current = ProofOfWork::package(genesis);
+
+		while (true) {
+			bool completed = false;
+
+			ProofOfWork::Solution solution;
+			f.onSolutionFound([&](ProofOfWork::Solution sol)
+			{
+				solution = sol;
+				return completed = true;
+			});
+			for (unsigned i = 0; !completed; ++i)
+			{
+				//cnote << "Mining on difficulty " << difficulty << " " << f.miningProgress();
+				this_thread::sleep_for(chrono::milliseconds(1000));
+			}
+			//cnote << "Solution found";
+			cnote << "Difficulty:" << difficulty << "  Nonce:" << solution.nonce.hex();
+			//cnote << "  Mixhash:" << solution.mixHash.hex();
+			//cnote << "  Header-hash:" << current.headerHash.hex();
+			//cnote << "  Seedhash:" << current.seedHash.hex();
+			//cnote << "  Target: " << h256(current.boundary).hex();
+			//cnote << "  Ethash: " << h256(EthashAux::eval(current.seedHash, current.headerHash, solution.nonce).value).hex();
+			if (EthashAux::eval(current.seedHash, current.headerHash, solution.nonce).value < current.boundary)
+			{
+				cnote << "SUCCESS: GPU gave correct result!";
+			}
+			else
+				cwarn << "FAILURE: GPU gave incorrect result!";
+
+
+			genesis.difficulty = u256(1) << ++difficulty;
+			genesis.noteDirty();
+			f.setWork(genesis);
+			current = ProofOfWork::package(genesis);
+		}
+	}
+
 	void doBenchmark(MinerType _m, bool _phoneHome, unsigned _warmupDuration = 15, unsigned _trialDuration = 3, unsigned _trials = 5)
 	{
 		BlockInfo genesis;
@@ -380,8 +453,8 @@ private:
 
 		cout << "Preparing DAG..." << endl;
 		Ethash::prep(genesis);
-
-		genesis.difficulty = u256(1) << 63;
+	
+		genesis.difficulty = u256(1) << 13;
 		genesis.noteDirty();
 		f.setWork(genesis);
 		if (_m == MinerType::CPU)

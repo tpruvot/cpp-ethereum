@@ -345,7 +345,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	unsigned buf = 0;
 	std::random_device engine;
-	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
+	uint64_t start_nonce = 0;// std::uniform_int_distribution<uint64_t>()(engine);
 	for (; ; start_nonce += m_search_batch_size)
 	{
 		// supply output buffer to kernel
@@ -371,8 +371,10 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 			for (unsigned i = 0; i != num_found; ++i)
 			{
 				nonces[i] = batch.start_nonce + results[i+1];
+				cout << nonces[i] << ", ";
 			}
-
+			if (num_found > 0)
+				cout << endl;
 			m_queue.enqueueUnmapMemObject(m_search_buf[batch.buf], results);
 			
 			bool exit = num_found && hook.found(nonces, num_found);
