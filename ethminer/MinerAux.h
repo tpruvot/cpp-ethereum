@@ -372,7 +372,7 @@ private:
 		exit(0);
 	}
 
-	void doFindSolution(MinerType _m, int difficulty = 13)
+	void doFindSolution(MinerType _m, int difficulty = 1)
 	{
 		BlockInfo genesis;
 		genesis.difficulty = 1 << 18;
@@ -454,7 +454,7 @@ private:
 		cout << "Preparing DAG..." << endl;
 		Ethash::prep(genesis);
 	
-		genesis.difficulty = u256(1) << 13;
+		genesis.difficulty = u256(1) << 63;
 		genesis.noteDirty();
 		f.setWork(genesis);
 		if (_m == MinerType::CPU)

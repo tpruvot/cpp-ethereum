@@ -18,6 +18,17 @@
 
 #define FNV_PRIME	0x01000193
 
+// Thanks for Lukas' code here
+#define SWAP64(n) \
+  (((n) << 56)						\
+   | (((n) & 0xff00) << 40)			\
+   | (((n) & 0xff0000) << 24)		\
+   | (((n) & 0xff000000) << 8)		\
+   | (((n) >> 8) & 0xff000000)		\
+   | (((n) >> 24) & 0xff0000)		\
+   | (((n) >> 40) & 0xff00)			\
+   | ((n) >> 56))
+
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
 	0x8000000080008000ULL, 0x000000000000808BULL, 0x0000000080000001ULL,
@@ -268,16 +279,13 @@ __global__ void ethash_search(
 {
 	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];
 	
-	uint32_t const gid = 2920; // blockIdx.x * blockDim.x + threadIdx.x;
+	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;
 	
 	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce, gid);
 	
 	//if (as_ulong(as_uchar8(hash.ulongs[0]).s76543210) < target)
 
-	uint64_t rev = __brevll(hash.uint64s[0]);
-	uint64_t rev2 = __brevll(uint64_t((uint8_t)(hash.uint64s[0])));
-
-	if (__brevll(hash.uint64s[0]) < target)
+	if (SWAP64(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);
 		g_output[g_output[0]] = gid;
