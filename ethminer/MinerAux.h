@@ -293,6 +293,7 @@ public:
 	{
 		if (m_minerType == MinerType::CPU)
 			ProofOfWork::CPUMiner::setNumInstances(miningThreads);
+#if ETH_ETHASHCL || !ETH_TRUE
 		else if (m_minerType == MinerType::GPU)
 		{
 			ProofOfWork::GPUMiner::setDefaultPlatform(openclPlatform);
@@ -300,6 +301,8 @@ public:
 			ProofOfWork::GPUMiner::setNumInstances(miningThreads);
 			ProofOfWork::GPUMiner::setKernelParameters(gpuMiningBuffers, gpuBatchSize, gpuWorkgroupSize);
 		}
+#endif
+#if ETH_ETHASHCU || !ETH_TRUE
 		else if (m_minerType == MinerType::CUDA)
 		{
 			ProofOfWork::CUDAMiner::setDefaultPlatform(openclPlatform);
@@ -307,6 +310,7 @@ public:
 			ProofOfWork::CUDAMiner::setNumInstances(miningThreads);
 			ProofOfWork::CUDAMiner::setKernelParameters(gpuMiningBuffers, gpuBatchSize, gpuWorkgroupSize);
 		}
+#endif
 		if (mode == OperationMode::DAGInit)
 			doInitDAG(initDAG);
 		else if (mode == OperationMode::Benchmark)
@@ -372,7 +376,7 @@ private:
 		exit(0);
 	}
 
-	void doFindSolution(MinerType _m, int difficulty = 1)
+	void doFindSolution(MinerType _m, int difficulty = 13)
 	{
 		BlockInfo genesis;
 		genesis.difficulty = 1 << 18;
