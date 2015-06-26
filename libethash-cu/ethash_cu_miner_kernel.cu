@@ -1,7 +1,7 @@
 /*
 * Genoil's CUDA mining kernel for Ethereum
 * based on Tim Hughes' opencl kernel.
-* thanks to trpuvot,djm34,sp,cbuchner for things i took from ccminer. 
+* thanks to trpuvot,djm34,sp,cbuchner for things i took from ccminer.
 */
 
 #include "ethash_cu_miner_kernel.h"
@@ -19,7 +19,7 @@
 #define FNV_PRIME	0x01000193
 
 // Thanks for Lukas' code here
-#define SWAP64(n) \
+#define SWAP64(n)					\
   (((n) << 56)						\
    | (((n) & 0xff00) << 40)			\
    | (((n) & 0xff0000) << 24)		\
@@ -27,7 +27,7 @@
    | (((n) >> 8) & 0xff000000)		\
    | (((n) >> 24) & 0xff0000)		\
    | (((n) >> 40) & 0xff00)			\
-   | ((n) >> 56))
+   | ((n)  >> 56))
 
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
@@ -153,8 +153,7 @@ __device__ hash64_t init_hash(hash32_t const* header, uint64_t nonce)
 		state[i] = 0;
 	}
 	
-	keccak_f1600_block(state, 8);// , hash_size + 1, init_size);
-	 
+	keccak_f1600_block(state, 8);
 	copy(init.uint64s, state, 8);
 	return init;
 }
@@ -164,7 +163,6 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 	// share init0
 	if (thread_id == 0)
 		*share = mix.x;
-	__syncthreads();
 	uint32_t init0 = *share;
 	
 	uint32_t a = 0;
@@ -183,8 +181,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
 				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
 			}
-			__syncthreads();
-			//__threadfence_block();
+			__threadfence_block();
 
 			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
 		}
@@ -253,16 +250,16 @@ __device__ hash32_t compute_hash(
 		// share init with other threads
 		if (i == thread_id)
 			share[hash_id].init = init;
-		__syncthreads();
+
 		uint4 thread_init = share[hash_id].init.uint4s[(thread_id & 3)];
-		__syncthreads();
+
 		uint32_t thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uint32s, g_dag);
 
 		share[hash_id].mix.uint32s[thread_id] = thread_mix;
-		__syncthreads();
+
 		if (i == thread_id)
 			mix = share[hash_id].mix;
-		__syncthreads();
+
 	} while (++i != THREADS_PER_HASH );
 
 	return final_hash(&init, &mix);
@@ -283,8 +280,6 @@ __global__ void ethash_search(
 	
 	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce, gid);
 	
-	//if (as_ulong(as_uchar8(hash.ulongs[0]).s76543210) < target)
-
 	if (SWAP64(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);
