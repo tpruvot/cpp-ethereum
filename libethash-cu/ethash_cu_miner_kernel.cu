@@ -7,6 +7,7 @@
 #include "ethash_cu_miner_kernel.h"
 #include "ethash_cu_miner_kernel_globals.h"
 #include "rotl64.cuh"
+//#include "generics/ldg.h"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
 #include "vector_types.h"
@@ -192,7 +193,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 			}
 			__threadfence_block();
 
-			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
+			mix = fnv4(mix, __ldg(&g_dag[*share].uint4s[thread_id]));
 		}
 		
 	} while ((a += 4) != ACCESSES);// d_acceses);
