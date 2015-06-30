@@ -11,14 +11,13 @@
 #include "device_functions.h"
 #include "vector_types.h"
 
-#define GROUP_SIZE 512
 #define ACCESSES 64
 #define THREADS_PER_HASH (128 / 16)
-#define HASHES_PER_LOOP (GROUP_SIZE / THREADS_PER_HASH)
 
 #define FNV_PRIME	0x01000193
 
 // Thanks for Lukas' code here
+/*
 #define SWAP64(n)					\
   (((n) << 56)						\
    | (((n) & 0xff00) << 40)			\
@@ -28,6 +27,16 @@
    | (((n) >> 24) & 0xff0000)		\
    | (((n) >> 40) & 0xff00)			\
    | ((n)  >> 56))
+*/
+
+#define SWAP64(v) \
+  ((ROTL64L(v,  8) & 0x000000FF000000FF) | \
+   (ROTL64L(v, 24) & 0x0000FF000000FF00) | \
+   (ROTL64H(v, 40) & 0x00FF000000FF0000) | \
+   (ROTL64H(v, 56) & 0xFF000000FF000000))
+
+
+
 
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
@@ -240,7 +249,7 @@ __device__ hash32_t compute_hash(
 
 	// Threads work together in this phase in groups of 8.
 	uint32_t const thread_id = gid & (THREADS_PER_HASH-1);
-	uint32_t const hash_id = (gid & (GROUP_SIZE - 1)) >> 3;/// THREADS_PER_HASH;
+	uint32_t const hash_id = (gid & (blockDim.x - 1)) >> 3;/// THREADS_PER_HASH;
 
 	hash32_t mix;
 	uint32_t i = 0;
@@ -266,7 +275,9 @@ __device__ hash32_t compute_hash(
 
 }
 
-__global__ void ethash_search(
+__global__ void 
+__launch_bounds__(128, 8)
+ethash_search(
 	uint32_t* g_output,
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
@@ -274,7 +285,7 @@ __global__ void ethash_search(
 	uint64_t target
 	)
 {
-	__shared__ compute_hash_share share[GROUP_SIZE / THREADS_PER_HASH];
+	extern __shared__  compute_hash_share share[];
 	
 	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;
 	
@@ -308,7 +319,8 @@ void run_ethash_search(
 	uint64_t target
 )
 {
-	ethash_search<<<blocks, threads, 0, stream>>>(g_output, g_header, g_dag, start_nonce, target);
+//	ethash_search <<<blocks, threads, 0, stream >>>(g_output, g_header, g_dag, start_nonce, target);
+	ethash_search <<<blocks, threads, (sizeof(compute_hash_share) * threads) / THREADS_PER_HASH, stream>>>(g_output, g_header, g_dag, start_nonce, target);
 }
 
 cudaError set_constants(

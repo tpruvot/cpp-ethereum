@@ -233,7 +233,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 			for (unsigned i = 0; i != num_found; ++i)
 			{
 				nonces[i] = batch.start_nonce + results[i + 1];
-			//	cout << nonces[i] << ", ";
+				//cout << results[i + 1] << ", ";
 			}
 			//if (num_found > 0)
 			//	cout << endl;
