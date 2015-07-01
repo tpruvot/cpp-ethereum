@@ -193,7 +193,11 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 			}
 			__threadfence_block();
 
+#if __CUDA_ARCH__ >= 350
 			mix = fnv4(mix, __ldg(&g_dag[*share].uint4s[thread_id]));
+#else
+			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
+#endif
 		}
 		
 	} while ((a += 4) != ACCESSES);// d_acceses);
