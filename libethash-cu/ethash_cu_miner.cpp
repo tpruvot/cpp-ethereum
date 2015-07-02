@@ -112,7 +112,7 @@ void ethash_cu_miner::finish()
 
 bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_buffers, unsigned search_batch_size, unsigned workgroup_size, unsigned _deviceId)
 {
-
+	
 	int device_count = get_num_devices();
 
 	if (device_count == 0)
@@ -136,7 +136,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 		cout << cudaGetErrorString(r) << endl;
 		return false;
 	}
-
+	cudaDeviceReset();
 	cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
 
 	m_num_buffers = num_buffers;

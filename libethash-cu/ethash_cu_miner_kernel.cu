@@ -36,6 +36,25 @@
    (ROTL64H(v, 40) & 0x00FF000000FF0000) | \
    (ROTL64H(v, 56) & 0xFF000000FF000000))
 
+#define SHFL_HASH64(dst, src, lane) \
+	for (uint32_t i = 0; i < 16; i++)  \
+		(dst).uint32s[i] = __shfl((src).uint32s[i], (lane), THREADS_PER_HASH) \
+/*	
+__forceinline__ __device__ void shuffle_init_hash(uint32_t * dst, uint32_t * src, uint32_t lane) {
+	for (uint32_t i = 0; i < 16; i++) {
+		dst[i] = __shfl(src[i], lane, THREADS_PER_HASH);
+	}
+}
+*/
+
+__forceinline__ __device__ void shuffle_init_hash(uint4 * dst, uint4 * src, uint32_t lane) {
+	for (uint32_t i = 0; i < 4; i++) {
+		dst[i].x = __shfl(src[i].x, lane, THREADS_PER_HASH);
+		dst[i].y = __shfl(src[i].y, lane, THREADS_PER_HASH);
+		dst[i].z = __shfl(src[i].z, lane, THREADS_PER_HASH);
+		dst[i].w = __shfl(src[i].w, lane, THREADS_PER_HASH);
+	}
+}
 
 
 
@@ -173,6 +192,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 	// share init0
 	if (thread_id == 0)
 		*share = mix.x;
+
 	uint32_t init0 = *share;
 	
 	uint32_t a = 0;
@@ -200,7 +220,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 #endif
 		}
 		
-	} while ((a += 4) != ACCESSES);// d_acceses);
+	} while ((a += 4) != ACCESSES);
 	
 	return fnv_reduce(mix);
 }
@@ -237,24 +257,72 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 
 typedef union
 {
-	hash64_t init;
+	hash64_t init;	
 	hash32_t mix;
 } compute_hash_share;
 
-__device__ hash32_t compute_hash(
-	compute_hash_share* share,
+__device__ hash32_t compute_hash_shuffle(
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
-	uint64_t start_nonce,
-	uint64_t gid
+	uint64_t nonce
 	)
 {
+	compute_hash_share share;
+
 	// Compute one init hash per work item.
-	hash64_t init = init_hash(g_header, start_nonce + gid);
+	hash64_t init = init_hash(g_header, nonce);
 
 	// Threads work together in this phase in groups of 8.
-	uint32_t const thread_id = gid & (THREADS_PER_HASH-1);
-	uint32_t const hash_id = (gid & (blockDim.x - 1)) >> 3;/// THREADS_PER_HASH;
+	uint32_t const thread_id = threadIdx.x & (THREADS_PER_HASH - 1);
+	uint32_t const hash_id = threadIdx.x >> 3;
+
+	hash32_t mix;
+	uint32_t i = 0;
+
+	do
+	{
+	
+		// read init from other thread
+
+		if (i != thread_id)
+			shuffle_init_hash(share.init.uint4s, init.uint4s, i);
+		else
+			share.init = init;
+
+		__syncthreads();
+		
+		uint4 thread_init = share.init.uint4s[thread_id & 3];
+		__syncthreads();
+		
+		uint32_t thread_mix = inner_loop(thread_init, thread_id, share.mix.uint32s, g_dag);
+
+		share.mix.uint32s[thread_id] = thread_mix;
+		__syncthreads();
+		
+		if (i == thread_id)
+			mix = share.mix;
+		__syncthreads();
+
+	} while (++i != THREADS_PER_HASH);
+
+	return final_hash(&init, &mix);
+}
+
+
+__device__ hash32_t compute_hash(
+	hash32_t const* g_header,
+	hash128_t const* g_dag,
+	uint64_t nonce
+	)
+{
+	extern __shared__  compute_hash_share share[];
+
+	// Compute one init hash per work item.
+	hash64_t init = init_hash(g_header, nonce);
+
+	// Threads work together in this phase in groups of 8.
+	uint32_t const thread_id = threadIdx.x & (THREADS_PER_HASH-1);
+	uint32_t const hash_id   = threadIdx.x >> 3;
 
 	hash32_t mix;
 	uint32_t i = 0;
@@ -264,20 +332,23 @@ __device__ hash32_t compute_hash(
 		// share init with other threads
 		if (i == thread_id)
 			share[hash_id].init = init;
+		
 
-		uint4 thread_init = share[hash_id].init.uint4s[(thread_id & 3)];
+		uint4 thread_init = share[hash_id].init.uint4s[thread_id & 3];
+		
 
 		uint32_t thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uint32s, g_dag);
 
 		share[hash_id].mix.uint32s[thread_id] = thread_mix;
+		
 
 		if (i == thread_id)
 			mix = share[hash_id].mix;
+		
 
 	} while (++i != THREADS_PER_HASH );
 
 	return final_hash(&init, &mix);
-
 }
 
 __global__ void 
@@ -290,12 +361,10 @@ ethash_search(
 	uint64_t target
 	)
 {
-	extern __shared__  compute_hash_share share[];
-	
-	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;
-	
-	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce, gid);
-	
+
+	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;	
+	hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);
+
 	if (SWAP64(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);

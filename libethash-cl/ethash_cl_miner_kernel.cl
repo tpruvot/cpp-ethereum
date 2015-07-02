@@ -389,6 +389,48 @@ hash32_t compute_hash(
 
 	return final_hash(&init, &mix, isolate);
 }
+hash32_t compute_hash(
+	__local compute_hash_share* share,
+	__constant hash32_t const* g_header,
+	__global hash128_t const* g_dag,
+	ulong nonce,
+	uint isolate
+	)
+{
+	uint const gid = get_global_id(0);
+
+	// Compute one init hash per work item.
+	hash64_t init = init_hash(g_header, nonce, isolate);
+
+	// Threads work together in this phase in groups of 8.
+	uint const thread_id = gid % THREADS_PER_HASH;
+	uint const hash_id = (gid % GROUP_SIZE) / THREADS_PER_HASH;
+
+	hash32_t mix;
+	uint i = 0;
+	do
+	{
+		// share init with other threads
+		if (i == thread_id)
+			share[hash_id].init = init;
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		uint4 thread_init = share[hash_id].init.uint4s[thread_id % (64 / sizeof(uint4))];
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		uint thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uints, g_dag, isolate);
+
+		share[hash_id].mix.uints[thread_id] = thread_mix;
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		if (i == thread_id)
+			mix = share[hash_id].mix;
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}
+	while (++i != (THREADS_PER_HASH & isolate));
+
+	return final_hash(&init, &mix, isolate);
+}
 
 __attribute__((reqd_work_group_size(GROUP_SIZE, 1, 1)))
 __kernel void ethash_hash_simple(

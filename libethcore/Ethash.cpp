@@ -474,6 +474,7 @@ bool Ethash::CUDAMiner::report(uint64_t _nonce)
 	Result r = EthashAux::eval(work().seedHash, work().headerHash, n);
 	if (r.value < work().boundary)
 		return submitProof(Solution{ n, r.mixHash });
+	cwarn << "GPU gave wrong result";
 	return false;
 }
 
