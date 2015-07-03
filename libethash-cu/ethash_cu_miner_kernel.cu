@@ -36,26 +36,27 @@
    (ROTL64H(v, 40) & 0x00FF000000FF0000) | \
    (ROTL64H(v, 56) & 0xFF000000FF000000))
 
-#define SHFL_HASH64(dst, src, lane) \
-	for (uint32_t i = 0; i < 16; i++)  \
-		(dst).uint32s[i] = __shfl((src).uint32s[i], (lane), THREADS_PER_HASH) \
-/*	
-__forceinline__ __device__ void shuffle_init_hash(uint32_t * dst, uint32_t * src, uint32_t lane) {
-	for (uint32_t i = 0; i < 16; i++) {
-		dst[i] = __shfl(src[i], lane, THREADS_PER_HASH);
+/*
+__forceinline__ __device__ void shuffle_init_hash(uint4 * dst, uint4 * src, int lane) {
+	//#pragma unroll 4
+	for (uint32_t i = 0; i < 4; i++) {
+		dst[i] = make_uint4(
+			__shfl((int)src[i].x, lane, THREADS_PER_HASH),
+			__shfl((int)src[i].y, lane, THREADS_PER_HASH),
+			__shfl((int)src[i].z, lane, THREADS_PER_HASH),
+			__shfl((int)src[i].w, lane, THREADS_PER_HASH));
 	}
 }
 */
 
-__forceinline__ __device__ void shuffle_init_hash(uint4 * dst, uint4 * src, uint32_t lane) {
-	for (uint32_t i = 0; i < 4; i++) {
-		dst[i].x = __shfl(src[i].x, lane, THREADS_PER_HASH);
-		dst[i].y = __shfl(src[i].y, lane, THREADS_PER_HASH);
-		dst[i].z = __shfl(src[i].z, lane, THREADS_PER_HASH);
-		dst[i].w = __shfl(src[i].w, lane, THREADS_PER_HASH);
-	}
+__device__ uint4 __shfl(uint4 val, unsigned int lane, int warpSize)
+{
+	return make_uint4(
+		__shfl((int)val.x, lane, warpSize),
+		__shfl((int)val.y, lane, warpSize),
+		__shfl((int)val.z, lane, warpSize),
+		__shfl((int)val.w, lane, warpSize));
 }
-
 
 
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
@@ -277,31 +278,31 @@ __device__ hash32_t compute_hash_shuffle(
 	uint32_t const hash_id = threadIdx.x >> 3;
 
 	hash32_t mix;
-	uint32_t i = 0;
+	int i = 0;
 
 	do
 	{
-	
+
 		// read init from other thread
 
-		if (i != thread_id)
-			shuffle_init_hash(share.init.uint4s, init.uint4s, i);
-		else
+		if (i == thread_id) 
 			share.init = init;
-
-		__syncthreads();
+		else {
+			share.init.uint4s[0] = __shfl(init.uint4s[0], i, THREADS_PER_HASH);
+			share.init.uint4s[1] = __shfl(init.uint4s[1], i, THREADS_PER_HASH);
+			share.init.uint4s[2] = __shfl(init.uint4s[2], i, THREADS_PER_HASH);
+			share.init.uint4s[3] = __shfl(init.uint4s[3], i, THREADS_PER_HASH);
+		}
+			//shuffle_init_hash(share.init.uint4s, share.init.uint4s, i);
 		
 		uint4 thread_init = share.init.uint4s[thread_id & 3];
-		__syncthreads();
-		
+
 		uint32_t thread_mix = inner_loop(thread_init, thread_id, share.mix.uint32s, g_dag);
 
 		share.mix.uint32s[thread_id] = thread_mix;
-		__syncthreads();
 		
 		if (i == thread_id)
 			mix = share.mix;
-		__syncthreads();
 
 	} while (++i != THREADS_PER_HASH);
 
@@ -333,10 +334,8 @@ __device__ hash32_t compute_hash(
 		if (i == thread_id)
 			share[hash_id].init = init;
 		
-
 		uint4 thread_init = share[hash_id].init.uint4s[thread_id & 3];
 		
-
 		uint32_t thread_mix = inner_loop(thread_init, thread_id, share[hash_id].mix.uint32s, g_dag);
 
 		share[hash_id].mix.uint32s[thread_id] = thread_mix;

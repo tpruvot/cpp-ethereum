@@ -213,7 +213,7 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 	unsigned buf = 0;
 	std::random_device engine;
-	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
+	uint64_t start_nonce = 0;// std::uniform_int_distribution<uint64_t>()(engine);
 	for (;; start_nonce += m_search_batch_size)
 	{
 		run_ethash_search(m_search_batch_size / m_workgroup_size, m_workgroup_size, m_streams[buf], m_search_buf[buf], m_header, m_dag_ptr, start_nonce, target);	
