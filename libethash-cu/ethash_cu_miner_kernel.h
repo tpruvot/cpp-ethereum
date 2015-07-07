@@ -19,7 +19,7 @@ typedef union
 
 typedef union
 {
-	//uint32_t uint32s[64 / sizeof(uint32_t)];
+	uint32_t uint32s[64 / sizeof(uint32_t)];
 	uint64_t uint64s[64 / sizeof(uint64_t)];
 	uint4	 uint4s[64 / sizeof(uint4)];
 } hash64_t;

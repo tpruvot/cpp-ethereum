@@ -36,29 +36,6 @@
    (ROTL64H(v, 40) & 0x00FF000000FF0000) | \
    (ROTL64H(v, 56) & 0xFF000000FF000000))
 
-/*
-__forceinline__ __device__ void shuffle_init_hash(uint4 * dst, uint4 * src, int lane) {
-	//#pragma unroll 4
-	for (uint32_t i = 0; i < 4; i++) {
-		dst[i] = make_uint4(
-			__shfl((int)src[i].x, lane, THREADS_PER_HASH),
-			__shfl((int)src[i].y, lane, THREADS_PER_HASH),
-			__shfl((int)src[i].z, lane, THREADS_PER_HASH),
-			__shfl((int)src[i].w, lane, THREADS_PER_HASH));
-	}
-}
-*/
-
-__device__ uint4 __shfl(uint4 val, unsigned int lane, int warpSize)
-{
-	return make_uint4(
-		__shfl((int)val.x, lane, warpSize),
-		__shfl((int)val.y, lane, warpSize),
-		__shfl((int)val.z, lane, warpSize),
-		__shfl((int)val.w, lane, warpSize));
-}
-
-
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
 	0x8000000080008000ULL, 0x000000000000808BULL, 0x0000000080000001ULL,
@@ -73,7 +50,7 @@ __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 __device__ static void keccak_f1600_block(uint64_t* s, uint32_t out_size)//, uint32_t in_size, uint32_t out_size)
 {
 	uint64_t t[5], u, v;
-	
+
 	for (size_t i = 0; i < 24; i++) {
 		/* theta: c = a[0,i] ^ a[1,i] ^ .. a[4,i] */
 		t[0] = s[0] ^ s[5] ^ s[10] ^ s[15] ^ s[20];
@@ -206,7 +183,7 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 		//#pragma unroll 4
 		for (uint32_t i = 0; i < 4; i++)
 		{
-			
+
 			if (update_share)
 			{
 				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
@@ -219,10 +196,43 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 #else
 			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
 #endif
+			
 		}
 		
 	} while ((a += 4) != ACCESSES);
 	
+	return fnv_reduce(mix);
+}
+
+__device__ uint32_t inner_loop_shuffle(uint4 mix, uint32_t thread_id, uint32_t* share, hash128_t const* g_dag, uint32_t start_lane)
+{
+	uint32_t init0 = *share;
+	uint32_t a = 0;
+
+	do
+	{
+		int t = ((a >> 2) & (THREADS_PER_HASH - 1));
+
+		//#pragma unroll 4
+		for (uint32_t i = 0; i < 4; i++)
+		{
+			if (thread_id == t)
+			{
+				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
+				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;	
+			}
+			*share = (uint32_t)__shfl((int)(*share), start_lane + t);
+		
+#if __CUDA_ARCH__ >= 350
+			mix = fnv4(mix, __ldg(&g_dag[*share].uint4s[thread_id]));
+#else
+			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
+#endif
+
+		}
+
+	} while ((a += 4) != ACCESSES);
+
 	return fnv_reduce(mix);
 }
 
@@ -231,9 +241,6 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 	uint64_t state[25];
 
 	hash32_t hash;
-	//uint32_t const hash_size = countof(hash.uint64s);	//	4
-	//uint32_t const init_size = countof(init->uint64s);	//	8
-	//uint32_t const mix_size  = countof(mix->uint64s);	//	4
 
 	// keccak_256(keccak_512(header..nonce) .. mix);
 	copy(state, init->uint64s, 8);
@@ -249,7 +256,7 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 		state[i] = 0;
 	}
 
-	keccak_f1600_block(state,4);// , init_size + mix_size, hash_size);
+	keccak_f1600_block(state,4);
 
 	// copy out
 	copy(hash.uint64s, state, 4);
@@ -279,31 +286,25 @@ __device__ hash32_t compute_hash_shuffle(
 
 	hash32_t mix;
 	int i = 0;
-
+	int start_lane = hash_id << 3;
 	do
 	{
+		for (uint32_t j = 0; j < 16; j++)
+			share.init.uint32s[j] = __shfl(init.uint32s[j], start_lane + i);
 
-		// read init from other thread
-
-		if (i == thread_id) 
-			share.init = init;
-		else {
-			share.init.uint4s[0] = __shfl(init.uint4s[0], i, THREADS_PER_HASH);
-			share.init.uint4s[1] = __shfl(init.uint4s[1], i, THREADS_PER_HASH);
-			share.init.uint4s[2] = __shfl(init.uint4s[2], i, THREADS_PER_HASH);
-			share.init.uint4s[3] = __shfl(init.uint4s[3], i, THREADS_PER_HASH);
-		}
-			//shuffle_init_hash(share.init.uint4s, share.init.uint4s, i);
-		
 		uint4 thread_init = share.init.uint4s[thread_id & 3];
 
-		uint32_t thread_mix = inner_loop(thread_init, thread_id, share.mix.uint32s, g_dag);
+		share.mix.uint32s[0] = (uint32_t)__shfl((int)(thread_init.x), start_lane);
 
-		share.mix.uint32s[thread_id] = thread_mix;
+		uint32_t thread_mix = inner_loop_shuffle(thread_init, thread_id, share.mix.uint32s, g_dag, start_lane);
 		
-		if (i == thread_id)
-			mix = share.mix;
+		for (uint32_t j = 0; j < 8; j++)
+			share.mix.uint32s[j] = __shfl(thread_mix, start_lane + j);
 
+		if (i == thread_id) {		
+			mix = share.mix;
+		}
+		
 	} while (++i != THREADS_PER_HASH);
 
 	return final_hash(&init, &mix);
@@ -351,7 +352,7 @@ __device__ hash32_t compute_hash(
 }
 
 __global__ void 
-__launch_bounds__(128, 8)
+__launch_bounds__(128, 7)
 ethash_search(
 	uint32_t* g_output,
 	hash32_t const* g_header,
@@ -362,7 +363,8 @@ ethash_search(
 {
 
 	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;	
-	hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);
+	//hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);
+	hash32_t hash = compute_hash_shuffle(g_header, g_dag, start_nonce + gid);
 
 	if (SWAP64(hash.uint64s[0]) < target)
 	{
