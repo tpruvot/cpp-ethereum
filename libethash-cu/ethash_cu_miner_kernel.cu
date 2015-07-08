@@ -7,7 +7,6 @@
 #include "ethash_cu_miner_kernel.h"
 #include "ethash_cu_miner_kernel_globals.h"
 #include "rotl64.cuh"
-//#include "generics/ldg.h"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
 #include "vector_types.h"
@@ -35,6 +34,10 @@
    (ROTL64L(v, 24) & 0x0000FF000000FF00) | \
    (ROTL64H(v, 40) & 0x00FF000000FF0000) | \
    (ROTL64H(v, 56) & 0xFF000000FF000000))
+
+#define PACK64(result, lo, hi) asm("mov.b64 %0, {%1,%2};//pack64"  : "=l"(result) : "r"(lo), "r"(hi));
+#define UNPACK64(lo, hi, input) asm("mov.b64 {%0, %1}, %2;//unpack64" : "=r"(lo),"=r"(hi) : "l"(input));
+
 
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
@@ -143,8 +146,6 @@ __device__ uint32_t fnv_reduce(uint4 v)
 __device__ hash64_t init_hash(hash32_t const* header, uint64_t nonce)
 {
 	hash64_t init;
-	//uint32_t const init_size = countof(init.uint64s);	//	8
-	//uint32_t const hash_size = countof(header->uint64s);	//	4
 
 	// sha3_512(header .. nonce)
 	uint64_t state[25];
@@ -204,38 +205,6 @@ __device__ uint32_t inner_loop(uint4 mix, uint32_t thread_id, uint32_t* share, h
 	return fnv_reduce(mix);
 }
 
-__device__ uint32_t inner_loop_shuffle(uint4 mix, uint32_t thread_id, uint32_t* share, hash128_t const* g_dag, uint32_t start_lane)
-{
-	uint32_t init0 = *share;
-	uint32_t a = 0;
-
-	do
-	{
-		int t = ((a >> 2) & (THREADS_PER_HASH - 1));
-
-		//#pragma unroll 4
-		for (uint32_t i = 0; i < 4; i++)
-		{
-			if (thread_id == t)
-			{
-				uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
-				*share = fnv(init0 ^ (a + i), m[i]) % d_dag_size;	
-			}
-			*share = (uint32_t)__shfl((int)(*share), start_lane + t);
-		
-#if __CUDA_ARCH__ >= 350
-			mix = fnv4(mix, __ldg(&g_dag[*share].uint4s[thread_id]));
-#else
-			mix = fnv4(mix, g_dag[*share].uint4s[thread_id]);
-#endif
-
-		}
-
-	} while ((a += 4) != ACCESSES);
-
-	return fnv_reduce(mix);
-}
-
 __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 {
 	uint64_t state[25];
@@ -269,47 +238,162 @@ typedef union
 	hash32_t mix;
 } compute_hash_share;
 
+
+
 __device__ hash32_t compute_hash_shuffle(
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
 	uint64_t nonce
 	)
 {
-	compute_hash_share share;
+	uint32_t s0,i0;
+	uint32_t s1,i1;
+	uint32_t s2,i2;
+	uint32_t s3,i3;
+	uint32_t s4,i4;
+	uint32_t s5,i5;
+	uint32_t s6,i6;
+	uint32_t s7,i7;
+	uint32_t s8,i8;
+	uint32_t s9,i9;
+	uint32_t s10,i10;
+	uint32_t s11,i11;
+	uint32_t s12,i12;
+	uint32_t s13,i13;
+	uint32_t s14,i14;
+	uint32_t s15,i15;
 
-	// Compute one init hash per work item.
-	hash64_t init = init_hash(g_header, nonce);
+	// sha3_512(header .. nonce)
+	uint64_t state[25];
+
+	copy(state, g_header->uint64s, 4);
+	state[4] = nonce;
+	state[5] = 0x0000000000000001;
+	for (uint32_t i = 6; i < 25; i++)
+	{
+		state[i] = 0;
+	}
+	state[8] = 0x8000000000000000;
+	keccak_f1600_block(state, 8);
+
+	UNPACK64(i0, i1,	state[0]);
+	UNPACK64(i2, i3,	state[1]);
+	UNPACK64(i4, i5,	state[2]);
+	UNPACK64(i6, i7,	state[3]);
+	UNPACK64(i8, i9,	state[4]);
+	UNPACK64(i10, i11,	state[5]);
+	UNPACK64(i12, i13,	state[6]);
+	UNPACK64(i14, i15,	state[7]);
 
 	// Threads work together in this phase in groups of 8.
 	uint32_t const thread_id = threadIdx.x & (THREADS_PER_HASH - 1);
 	uint32_t const hash_id = threadIdx.x >> 3;
 
-	hash32_t mix;
 	int i = 0;
 	int start_lane = hash_id << 3;
+
 	do
 	{
-		for (uint32_t j = 0; j < 16; j++)
-			share.init.uint32s[j] = __shfl(init.uint32s[j], start_lane + i);
+		s0 = __shfl(i0, start_lane + i);
+		s1 = __shfl(i1, start_lane + i);
+		s2 = __shfl(i2, start_lane + i);
+		s3 = __shfl(i3, start_lane + i);
+		s4 = __shfl(i4, start_lane + i);
+		s5 = __shfl(i5, start_lane + i);
+		s6 = __shfl(i6, start_lane + i);
+		s7 = __shfl(i7, start_lane + i);
+		s8 = __shfl(i8, start_lane + i);
+		s9 = __shfl(i9, start_lane + i);
+		s10 = __shfl(i10, start_lane + i);
+		s11 = __shfl(i11, start_lane + i);
+		s12 = __shfl(i12, start_lane + i);
+		s13 = __shfl(i13, start_lane + i);
+		s14 = __shfl(i14, start_lane + i);
+		s15 = __shfl(i15, start_lane + i);
 
-		uint4 thread_init = share.init.uint4s[thread_id & 3];
+		uint4 mix;
+		uint32_t t3 = thread_id & 3;
+		if (t3 == 0) {
+			mix = make_uint4(s0, s1, s2, s3);
+		}
+		else if (t3 == 1) {
+			mix = make_uint4(s4, s5, s6, s7);
+		}
+		else if (t3 == 2) {
+			mix = make_uint4(s8, s9, s10, s11);
+		}
+		else {
+			mix = make_uint4(s12, s13, s14, s15);
+		}
+			
+		s0 = (uint32_t)__shfl((int)(mix.x), start_lane);
 
-		share.mix.uint32s[0] = (uint32_t)__shfl((int)(thread_init.x), start_lane);
+		//uint32_t thread_mix = inner_loop_shuffle(thread_init, thread_id, &s0, g_dag, start_lane);
 
-		uint32_t thread_mix = inner_loop_shuffle(thread_init, thread_id, share.mix.uint32s, g_dag, start_lane);
-		
-		for (uint32_t j = 0; j < 8; j++)
-			share.mix.uint32s[j] = __shfl(thread_mix, start_lane + j);
+		uint32_t init0 = s0;
+		uint32_t a = 0;
 
-		if (i == thread_id) {		
-			mix = share.mix;
+		do
+		{
+			int t = ((a >> 2) & (THREADS_PER_HASH - 1));
+
+			//#pragma unroll 4
+			for (uint32_t i = 0; i < 4; i++)
+			{
+				if (thread_id == t)
+				{
+					uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
+					s0 = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
+				}
+				s0 = (uint32_t)__shfl((int)s0, start_lane + t);
+
+#if __CUDA_ARCH__ >= 350
+				mix = fnv4(mix, __ldg(&g_dag[s0].uint4s[thread_id]));
+#else
+				mix = fnv4(mix, g_dag[s0].uint4s[thread_id]);
+#endif
+
+			}
+
+		} while ((a += 4) != ACCESSES);
+
+		uint32_t thread_mix = fnv_reduce(mix);
+
+		// update mix
+		s0 = __shfl(thread_mix, start_lane + 0);
+		s1 = __shfl(thread_mix, start_lane + 1);
+		s2 = __shfl(thread_mix, start_lane + 2);
+		s3 = __shfl(thread_mix, start_lane + 3);
+		s4 = __shfl(thread_mix, start_lane + 4);
+		s5 = __shfl(thread_mix, start_lane + 5);
+		s6 = __shfl(thread_mix, start_lane + 6);
+		s7 = __shfl(thread_mix, start_lane + 7);
+
+		if (i == thread_id) {	
+			//move mix into state:
+			PACK64(state[8], s0, s1);
+			PACK64(state[9], s2, s3);
+			PACK64(state[10], s4, s5);
+			PACK64(state[11], s6, s7);
 		}
 		
 	} while (++i != THREADS_PER_HASH);
 
-	return final_hash(&init, &mix);
-}
+	hash32_t hash;
 
+	// keccak_256(keccak_512(header..nonce) .. mix);
+	state[12] = 0x0000000000000001;
+	for (uint32_t i = 13; i < 25; i++)
+	{
+		state[i] = 0;
+	}
+	state[16] = 0x8000000000000000;
+	keccak_f1600_block(state, 4);
+
+	// copy out
+	copy(hash.uint64s, state, 4);
+	return hash;
+}
 
 __device__ hash32_t compute_hash(
 	hash32_t const* g_header,
