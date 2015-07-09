@@ -142,7 +142,7 @@ __device__ uint32_t fnv_reduce(uint4 v)
 {
 	return fnv(fnv(fnv(v.x, v.y), v.z), v.w);
 }
-
+/*
 __device__ hash64_t init_hash(hash32_t const* header, uint64_t nonce)
 {
 	hash64_t init;
@@ -237,31 +237,15 @@ typedef union
 	hash64_t init;	
 	hash32_t mix;
 } compute_hash_share;
-
-
-
+*/
 __device__ hash32_t compute_hash_shuffle(
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
 	uint64_t nonce
 	)
 {
-	uint32_t s0,i0;
-	uint32_t s1,i1;
-	uint32_t s2,i2;
-	uint32_t s3,i3;
-	uint32_t s4,i4;
-	uint32_t s5,i5;
-	uint32_t s6,i6;
-	uint32_t s7,i7;
-	uint32_t s8,i8;
-	uint32_t s9,i9;
-	uint32_t s10,i10;
-	uint32_t s11,i11;
-	uint32_t s12,i12;
-	uint32_t s13,i13;
-	uint32_t s14,i14;
-	uint32_t s15,i15;
+	uint32_t s[16];
+	uint32_t i[16];
 
 	// sha3_512(header .. nonce)
 	uint64_t state[25];
@@ -276,83 +260,54 @@ __device__ hash32_t compute_hash_shuffle(
 	state[8] = 0x8000000000000000;
 	keccak_f1600_block(state, 8);
 
-	UNPACK64(i0, i1,	state[0]);
-	UNPACK64(i2, i3,	state[1]);
-	UNPACK64(i4, i5,	state[2]);
-	UNPACK64(i6, i7,	state[3]);
-	UNPACK64(i8, i9,	state[4]);
-	UNPACK64(i10, i11,	state[5]);
-	UNPACK64(i12, i13,	state[6]);
-	UNPACK64(i14, i15,	state[7]);
+	for (int j = 0; j < 8; j++)
+		UNPACK64(i[j*2], i[j*2+1],	state[j]);
 
 	// Threads work together in this phase in groups of 8.
-	uint32_t const thread_id = threadIdx.x & (THREADS_PER_HASH - 1);
-	uint32_t const hash_id = threadIdx.x >> 3;
+	uint64_t const thread_id = threadIdx.x & (THREADS_PER_HASH - 1);
+	const int start_lane = (threadIdx.x >> 3) << 3;
+	int n = 0;
+	
+	uint32_t mix_idx = (thread_id & 3) << 2;
 
-	int i = 0;
-	int start_lane = hash_id << 3;
+	uint32_t x[4];
+	x[0] = s[mix_idx];
+	x[1] = s[++mix_idx];
+	x[2] = s[++mix_idx];
+	x[3] = s[++mix_idx];
+
+	uint4 mix;
 
 	do
 	{
-		s0 = __shfl(i0, start_lane + i);
-		s1 = __shfl(i1, start_lane + i);
-		s2 = __shfl(i2, start_lane + i);
-		s3 = __shfl(i3, start_lane + i);
-		s4 = __shfl(i4, start_lane + i);
-		s5 = __shfl(i5, start_lane + i);
-		s6 = __shfl(i6, start_lane + i);
-		s7 = __shfl(i7, start_lane + i);
-		s8 = __shfl(i8, start_lane + i);
-		s9 = __shfl(i9, start_lane + i);
-		s10 = __shfl(i10, start_lane + i);
-		s11 = __shfl(i11, start_lane + i);
-		s12 = __shfl(i12, start_lane + i);
-		s13 = __shfl(i13, start_lane + i);
-		s14 = __shfl(i14, start_lane + i);
-		s15 = __shfl(i15, start_lane + i);
+		for (int j = 0; j < 16; j++)
+			s[j] = __shfl(i[j], start_lane + n);
 
-		uint4 mix;
-		uint32_t t3 = thread_id & 3;
-		if (t3 == 0) {
-			mix = make_uint4(s0, s1, s2, s3);
-		}
-		else if (t3 == 1) {
-			mix = make_uint4(s4, s5, s6, s7);
-		}
-		else if (t3 == 2) {
-			mix = make_uint4(s8, s9, s10, s11);
-		}
-		else {
-			mix = make_uint4(s12, s13, s14, s15);
-		}
-			
-		s0 = (uint32_t)__shfl((int)(mix.x), start_lane);
+		mix = make_uint4(x[0], x[1], x[2], x[3]);
 
-		//uint32_t thread_mix = inner_loop_shuffle(thread_init, thread_id, &s0, g_dag, start_lane);
-
-		uint32_t init0 = s0;
+		uint32_t init0 = __shfl(s[0], start_lane);
 		uint32_t a = 0;
 
+		
 		do
 		{
 			int t = ((a >> 2) & (THREADS_PER_HASH - 1));
 
-			//#pragma unroll 4
-			for (uint32_t i = 0; i < 4; i++)
+			for (uint32_t b = 0; b < 4; b++)
 			{
 				if (thread_id == t)
 				{
 					uint32_t m[4] = { mix.x, mix.y, mix.z, mix.w };
-					s0 = fnv(init0 ^ (a + i), m[i]) % d_dag_size;
+					s[0] = fnv(init0 ^ (a + b), m[b]) % d_dag_size;
 				}
-				s0 = (uint32_t)__shfl((int)s0, start_lane + t);
+				
+				s[0] = __shfl(s[0], start_lane + t);
 
-#if __CUDA_ARCH__ >= 350
-				mix = fnv4(mix, __ldg(&g_dag[s0].uint4s[thread_id]));
-#else
-				mix = fnv4(mix, g_dag[s0].uint4s[thread_id]);
-#endif
-
+				#if __CUDA_ARCH__ >= 350
+				mix = fnv4(mix, __ldg(&g_dag[s[0]].uint4s[thread_id]));
+				#else
+				mix = fnv4(mix, g_dag[s[0]].uint4s[thread_id]);
+				#endif
 			}
 
 		} while ((a += 4) != ACCESSES);
@@ -360,24 +315,18 @@ __device__ hash32_t compute_hash_shuffle(
 		uint32_t thread_mix = fnv_reduce(mix);
 
 		// update mix
-		s0 = __shfl(thread_mix, start_lane + 0);
-		s1 = __shfl(thread_mix, start_lane + 1);
-		s2 = __shfl(thread_mix, start_lane + 2);
-		s3 = __shfl(thread_mix, start_lane + 3);
-		s4 = __shfl(thread_mix, start_lane + 4);
-		s5 = __shfl(thread_mix, start_lane + 5);
-		s6 = __shfl(thread_mix, start_lane + 6);
-		s7 = __shfl(thread_mix, start_lane + 7);
+		for (int j = 0; j < 8; j++)
+			s[j] = __shfl(thread_mix, start_lane + j);
 
-		if (i == thread_id) {	
+		if (n == thread_id) {	
 			//move mix into state:
-			PACK64(state[8], s0, s1);
-			PACK64(state[9], s2, s3);
-			PACK64(state[10], s4, s5);
-			PACK64(state[11], s6, s7);
+			PACK64(state[8], s[0], s[1]);
+			PACK64(state[9], s[2], s[3]);
+			PACK64(state[10], s[4], s[5]);
+			PACK64(state[11], s[6], s[7]);
 		}
 		
-	} while (++i != THREADS_PER_HASH);
+	} while (++n != THREADS_PER_HASH);
 
 	hash32_t hash;
 
@@ -394,7 +343,7 @@ __device__ hash32_t compute_hash_shuffle(
 	copy(hash.uint64s, state, 4);
 	return hash;
 }
-
+/*
 __device__ hash32_t compute_hash(
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
@@ -434,9 +383,9 @@ __device__ hash32_t compute_hash(
 
 	return final_hash(&init, &mix);
 }
-
+*/
 __global__ void 
-__launch_bounds__(128, 7)
+__launch_bounds__(64, 16)
 ethash_search(
 	uint32_t* g_output,
 	hash32_t const* g_header,
@@ -449,13 +398,13 @@ ethash_search(
 	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;	
 	//hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);
 	hash32_t hash = compute_hash_shuffle(g_header, g_dag, start_nonce + gid);
-
+	
 	if (SWAP64(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);
 		g_output[g_output[0]] = gid;
 	}
-	
+
 }
 
 void run_ethash_hash(
@@ -478,8 +427,8 @@ void run_ethash_search(
 	uint64_t target
 )
 {
-//	ethash_search <<<blocks, threads, 0, stream >>>(g_output, g_header, g_dag, start_nonce, target);
-	ethash_search <<<blocks, threads, (sizeof(compute_hash_share) * threads) / THREADS_PER_HASH, stream>>>(g_output, g_header, g_dag, start_nonce, target);
+	ethash_search <<<blocks, threads, 0, stream >>>(g_output, g_header, g_dag, start_nonce, target);
+//	ethash_search <<<blocks, threads, (sizeof(compute_hash_share) * threads) / THREADS_PER_HASH, stream>>>(g_output, g_header, g_dag, start_nonce, target);
 }
 
 cudaError set_constants(
