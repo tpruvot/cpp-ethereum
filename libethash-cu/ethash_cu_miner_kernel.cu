@@ -268,22 +268,31 @@ __device__ hash32_t compute_hash_shuffle(
 	const int start_lane = (threadIdx.x >> 3) << 3;
 	int n = 0;
 	
-	uint32_t mix_idx = (thread_id & 3) << 2;
-
-	uint32_t x[4];
-	x[0] = s[mix_idx];
-	x[1] = s[++mix_idx];
-	x[2] = s[++mix_idx];
-	x[3] = s[++mix_idx];
-
+	const uint32_t mix_idx = (thread_id & 3);
 	uint4 mix;
 
+	
 	do
 	{
 		for (int j = 0; j < 16; j++)
 			s[j] = __shfl(i[j], start_lane + n);
 
-		mix = make_uint4(x[0], x[1], x[2], x[3]);
+
+		//mix = make_uint4(s[mix_idx], s[mix_idx + 1], s[mix_idx + 2], s[mix_idx + 3]);
+		
+		if (mix_idx == 0) {
+			mix = make_uint4(s[0], s[1], s[2], s[3]);
+		}
+		else if (mix_idx == 1) {
+			mix = make_uint4(s[4], s[5], s[6], s[7]);
+		}
+		else if (mix_idx == 2) {
+			mix = make_uint4(s[8], s[9], s[10], s[11]);
+		}
+		else {
+			mix = make_uint4(s[12], s[13], s[14], s[15]);
+		}
+		
 
 		uint32_t init0 = __shfl(s[0], start_lane);
 		uint32_t a = 0;
