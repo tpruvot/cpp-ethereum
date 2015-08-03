@@ -356,10 +356,8 @@ __device__ hash32_t compute_hash(
 	uint32_t const hash_id   = threadIdx.x >> 3;
 
 	hash32_t mix;
-	uint32_t i = THREADS_PER_HASH;
-	
 
-	while (--i)
+	for (int i = 0; i < THREADS_PER_HASH; i++)
 	{
 		// share init with other threads
 		if (i == thread_id)
