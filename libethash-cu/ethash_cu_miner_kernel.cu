@@ -269,9 +269,9 @@ __device__ uint64_t compute_hash_shuffle(
 	uint32_t shuffle[16];
 	uint32_t * init = (uint32_t *)state;
 
-	int i = THREADS_PER_HASH;
-	while (--i)
+	for (int i = 0; i < THREADS_PER_HASH; i++)
 	{
+
 		// share init among threads
 		for (int j = 0; j < 16; j++)
 			shuffle[j] = __shfl(init[j], start_lane + i);
