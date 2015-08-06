@@ -284,6 +284,18 @@ public:
 				throw BadArgument();
 			}
 		}
+		else if (arg == "--gpu-devices") {
+			while (gpuDeviceCount < 8 && i + 1 < argc)
+			{
+				try {
+					gpuDevices[gpuDeviceCount++] = stol(argv[++i]);
+				}
+				catch (...)
+				{
+					break;
+				}
+			}
+		}
 		else
 			return false;
 		return true;
@@ -307,8 +319,15 @@ public:
 		{
 			ProofOfWork::CUDAMiner::setDefaultPlatform(openclPlatform);
 			ProofOfWork::CUDAMiner::setDefaultDevice(openclDevice);
-			ProofOfWork::CUDAMiner::setNumInstances(miningThreads);
+			
 			ProofOfWork::CUDAMiner::setKernelParameters(gpuMiningBuffers, gpuBatchSize, gpuWorkgroupSize);
+			if (gpuDeviceCount > 0) {
+				ProofOfWork::CUDAMiner::setNumInstances(gpuDeviceCount);
+				ProofOfWork::CUDAMiner::setDevices(gpuDevices, gpuDeviceCount);
+			}
+			else {
+				ProofOfWork::CUDAMiner::setNumInstances(miningThreads);
+			}
 		}
 #endif
 		if (mode == OperationMode::DAGInit)
@@ -353,7 +372,7 @@ public:
 			<< "	--gpu-mining-buffers <n> Number of GPU mining buffers (default: 2)" << endl
 			<< "	--gpu-batch-size <n> Mining batch size as a power of 2 (default: 18 => 262144)" << endl
 			<< "	--gpu-workgroup-size <n> Mining workgroup size (opencl) / threads per block (CUDA). Should be multiple of 8. (default: 64)." << endl 
-
+			<< "	--gpu-devices <0 1 2 ..> Use selected gpu devices (CUDA only). (default: 0, max 8 GPUs)" << endl	
 			;
 	}
 
@@ -613,6 +632,8 @@ private:
 	unsigned gpuMiningBuffers = 2;
 	unsigned gpuBatchSize = 1 << 18;
 	unsigned gpuWorkgroupSize = 64;
+	unsigned gpuDeviceCount = 0;
+	unsigned gpuDevices[8];
 
 	/// DAG initialisation param.
 	unsigned initDAG = 0;

@@ -451,6 +451,8 @@ unsigned Ethash::CUDAMiner::s_miningBuffers = 2;
 unsigned Ethash::CUDAMiner::s_batchSize = 1 << 18;
 unsigned Ethash::CUDAMiner::s_workgroupSize = 64;
 
+int Ethash::CUDAMiner::s_devices[8] = { -1, -1, -1, -1, -1, -1, -1, -1 } ;
+
 Ethash::CUDAMiner::CUDAMiner(ConstructionInfo const& _ci) :
 Miner(_ci),
 Worker("cudaminer" + toString(index())),
@@ -498,7 +500,7 @@ void Ethash::CUDAMiner::workLoop()
 			delete m_miner;
 			m_miner = new ethash_cu_miner;
 
-			unsigned device = instances() > 1 ? index() : s_deviceId;
+			unsigned device = instances() > 1 ? (s_devices[index()] > -1 ? s_devices[index()] : index()) : s_deviceId;
 
 			EthashAux::FullType dag;
 			while (true)

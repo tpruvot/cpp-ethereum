@@ -173,6 +173,12 @@ public:
 			s_batchSize		= _batchSize;
 			s_workgroupSize = _workgroupSize;
 		}
+		static void setDevices(unsigned * gpuDevices, unsigned gpuDeviceCount) {
+			for (int i = 0; i < gpuDeviceCount; i++) {
+				s_devices[i] = gpuDevices[i];
+			}
+		}
+		 
 	protected:
 		void kickOff() override;
 		void pause() override;
@@ -192,6 +198,7 @@ public:
 		static unsigned s_miningBuffers;
 		static unsigned s_batchSize;
 		static unsigned s_workgroupSize;
+		static int s_devices[8];
 	};
 #else
 	using CUDAMiner = CPUMiner;

@@ -61,7 +61,7 @@ void version()
 int main(int argc, char** argv)
 {
 	MinerCLI m(MinerCLI::OperationMode::Farm);
-
+	
 	for (int i = 1; i < argc; ++i)
 	{
 		string arg = argv[i];
