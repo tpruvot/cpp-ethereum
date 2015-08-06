@@ -16,19 +16,6 @@
 
 #define FNV_PRIME	0x01000193
 
-// Thanks for Lukas' code here
-/*
-#define SWAP64(n)					\
-  (((n) << 56)						\
-   | (((n) & 0xff00) << 40)			\
-   | (((n) & 0xff0000) << 24)		\
-   | (((n) & 0xff000000) << 8)		\
-   | (((n) >> 8) & 0xff000000)		\
-   | (((n) >> 24) & 0xff0000)		\
-   | (((n) >> 40) & 0xff00)			\
-   | ((n)  >> 56))
-*/
-
 #define SWAP64(v) \
   ((ROTL64L(v,  8) & 0x000000FF000000FF) | \
    (ROTL64L(v, 24) & 0x0000FF000000FF00) | \
@@ -240,6 +227,7 @@ typedef union
 	hash32_t mix;
 } compute_hash_share;
 
+#if __CUDA_ARCH__ >= 300
 __device__ uint64_t compute_hash_shuffle(
 	hash32_t const* g_header,
 	hash128_t const* g_dag,
@@ -338,7 +326,7 @@ __device__ uint64_t compute_hash_shuffle(
 
 	return state[0];
 }
-
+#endif
 
 __device__ hash32_t compute_hash(
 	hash32_t const* g_header,
@@ -389,21 +377,23 @@ ethash_search(
 {
 	
 	uint32_t const gid = blockIdx.x * blockDim.x + threadIdx.x;	
-	/*
-	hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);	
-	if (SWAP64(hash.uint64s[0]) < target)
-	{
-		atomicInc(g_output,d_max_outputs);
-		g_output[g_output[0]] = gid;
-	}
-	*/
 	
+#if __CUDA_ARCH__ >= 300
 	uint64_t hash = compute_hash_shuffle(g_header, g_dag, start_nonce + gid);
 	if (SWAP64(hash) < target)
 	{
 		atomicInc(g_output, d_max_outputs);
 		g_output[g_output[0]] = gid;
 	}
+#else
+	hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);	
+	if (SWAP64(hash.uint64s[0]) < target)
+	{
+		atomicInc(g_output,d_max_outputs);
+		g_output[g_output[0]] = gid;
+	}
+#endif
+	
 	
 }
 
