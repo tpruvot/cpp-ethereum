@@ -217,9 +217,10 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 	for (;; start_nonce += m_search_batch_size)
 	{
 		run_ethash_search(m_search_batch_size / m_workgroup_size, m_workgroup_size, m_streams[buf], m_search_buf[buf], m_header, m_dag_ptr, start_nonce, target);	
-
+		
 		pending.push({ start_nonce, buf });
 		buf = (buf + 1) % m_num_buffers;
+
 
 		// read results
 		if (pending.size() == m_num_buffers)
