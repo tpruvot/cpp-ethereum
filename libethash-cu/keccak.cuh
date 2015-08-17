@@ -1,3 +1,5 @@
+#include "cuda_helper.h"
+
 __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
 	0x8000000080008000ULL, 0x000000000000808BULL, 0x0000000080000001ULL,
@@ -11,7 +13,7 @@ __device__ __constant__ uint64_t const keccak_round_constants[24] = {
 
 #define bitselect(a, b, c) ((a) ^ ((c) & ((b) ^ (a))))
 
-__device__ __forceinline__ void keccak_f1600_block(uint2* s, uint32_t out_size)//, uint32_t in_size, uint32_t out_size)
+__device__ __forceinline__ void keccak_f1600_block(uint2* s, uint32_t out_size)
 {
 	uint2 t[5], u, v;
 
