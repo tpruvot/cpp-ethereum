@@ -137,7 +137,9 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 		return false;
 	}
 	cudaDeviceReset();
-	cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
+	//cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
+	cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
+	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 
 	m_num_buffers = num_buffers;
 	m_search_batch_size = search_batch_size;

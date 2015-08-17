@@ -9,6 +9,7 @@
 #include "ethash_cu_miner_kernel.h"
 #include "ethash_cu_miner_kernel_globals.h"
 #include "rotl64.cuh"
+#include "cuda_helper.h"
 #include "keccak.cuh"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
@@ -68,7 +69,7 @@ __device__ hash64_t init_hash(hash32_t const* header, uint64_t nonce)
 		state[i] = 0;
 	}
 	
-	keccak_f1600_block(state, 8);
+	keccak_f1600_block((uint2 *)state, 8);
 	copy(init.uint64s, state, 8);
 	return init;
 }
@@ -132,7 +133,7 @@ __device__ hash32_t final_hash(hash64_t const* init, hash32_t const* mix)
 		state[i] = 0;
 	}
 
-	keccak_f1600_block(state,1);
+	keccak_f1600_block((uint2 *)state, 1);
 
 	// copy out
 	copy(hash.uint64s, state, 4);
@@ -163,7 +164,7 @@ __device__ uint64_t compute_hash_shuffle(
 		state[i] = 0;
 	}
 	state[8] = 0x8000000000000000ULL;
-	keccak_f1600_block(state, 8);
+	keccak_f1600_block((uint2 *)state, 8);
 
 	// Threads work together in this phase in groups of 8.
 	const int thread_id = threadIdx.x & (THREADS_PER_HASH - 1);
@@ -250,7 +251,7 @@ __device__ uint64_t compute_hash_shuffle(
 		state[i] = 0ULL;
 	}
 	state[16] = 0x8000000000000000;
-	keccak_f1600_block(state, 1);
+	keccak_f1600_block((uint2 *)state, 1);
 
 	return state[0];
 }
