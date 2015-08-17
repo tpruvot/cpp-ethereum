@@ -371,7 +371,7 @@ public:
 			<< "    -t, --mining-threads <n> Limit number of CPU/GPU miners to n (default: all CPU threads / 1 GPU)" << endl
 			<< "	--gpu-mining-buffers <n> Number of GPU mining buffers (default: 2)" << endl
 			<< "	--gpu-batch-size <n> Mining batch size as a power of 2 (default: 18 => 262144)" << endl
-			<< "	--gpu-workgroup-size <n> Mining workgroup size (opencl) / threads per block (CUDA). Should be multiple of 8. (default: 64)." << endl 
+			<< "	--gpu-workgroup-size <n> Mining workgroup size (opencl) / threads per block (CUDA). Should be multiple of 8. (default: 128)." << endl 
 			<< "	--gpu-devices <0 1 2 ..> Use selected gpu devices (CUDA only). (default: 0, max 8 GPUs)" << endl	
 			;
 	}
@@ -631,7 +631,7 @@ private:
 	unsigned miningThreads = UINT_MAX;
 	unsigned gpuMiningBuffers = 2;
 	unsigned gpuBatchSize = 1 << 18;
-	unsigned gpuWorkgroupSize = 64;
+	unsigned gpuWorkgroupSize = 128;
 	unsigned gpuDeviceCount = 0;
 	unsigned gpuDevices[8];
 

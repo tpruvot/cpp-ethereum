@@ -309,14 +309,14 @@ ethash_search(
 	
 #if __CUDA_ARCH__ >= SHUFFLE_MIN_VER
 	uint64_t hash = compute_hash_shuffle(g_header, g_dag, start_nonce + gid);
-	if (SWAP64(hash) < target)
+	if (cuda_swab64(hash) < target)
 	{
 		atomicInc(g_output, d_max_outputs);
 		g_output[g_output[0]] = gid;
 	}
 #else
 	hash32_t hash = compute_hash(g_header, g_dag, start_nonce + gid);	
-	if (SWAP64(hash.uint64s[0]) < target)
+	if (cuda_swab64(hash.uint64s[0]) < target)
 	{
 		atomicInc(g_output,d_max_outputs);
 		g_output[g_output[0]] = gid;

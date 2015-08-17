@@ -174,7 +174,7 @@ public:
 			s_workgroupSize = _workgroupSize;
 		}
 		static void setDevices(unsigned * gpuDevices, unsigned gpuDeviceCount) {
-			for (int i = 0; i < gpuDeviceCount; i++) {
+			for (unsigned i = 0; i < gpuDeviceCount; i++) {
 				s_devices[i] = gpuDevices[i];
 			}
 		}

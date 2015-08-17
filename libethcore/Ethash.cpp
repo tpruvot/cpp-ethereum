@@ -291,7 +291,7 @@ unsigned Ethash::GPUMiner::s_numInstances = 0;
 
 unsigned Ethash::GPUMiner::s_miningBuffers = 2;
 unsigned Ethash::GPUMiner::s_batchSize = 1 << 18;
-unsigned Ethash::GPUMiner::s_workgroupSize = 64;
+unsigned Ethash::GPUMiner::s_workgroupSize = 128;
 
 Ethash::GPUMiner::GPUMiner(ConstructionInfo const& _ci):
 	Miner(_ci),
@@ -449,7 +449,7 @@ unsigned Ethash::CUDAMiner::s_numInstances = 1;
 
 unsigned Ethash::CUDAMiner::s_miningBuffers = 2;
 unsigned Ethash::CUDAMiner::s_batchSize = 1 << 18;
-unsigned Ethash::CUDAMiner::s_workgroupSize = 64;
+unsigned Ethash::CUDAMiner::s_workgroupSize = 128;
 
 int Ethash::CUDAMiner::s_devices[8] = { -1, -1, -1, -1, -1, -1, -1, -1 } ;
 
