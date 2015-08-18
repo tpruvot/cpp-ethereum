@@ -60,6 +60,13 @@ void version()
 
 int main(int argc, char** argv)
 {
+	cout << "Genoil's CUDA ethminer" << endl;
+	cout << "=====================================================================" << endl;
+	cout << "Please consider donating a tiny fraction of the extra performance to:" << endl;
+	cout << "ETH: 0xb9310b185455f863f526dab3d245809f6854b4d" << endl;
+	cout << "BTC: 1Nu2fMCEBjmnLzqb8qUJpKgq5RoEWFhNcW" << endl;
+	cout << endl;
+
 	MinerCLI m(MinerCLI::OperationMode::Farm);
 	
 	for (int i = 1; i < argc; ++i)
