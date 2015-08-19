@@ -29,6 +29,8 @@
 #include <queue>
 #include <random>
 #include <vector>
+#include <chrono>
+#include <thread>
 #include <libethash/util.h>
 #include <libethash/ethash.h>
 #include "ethash_cu_miner.h"
@@ -107,6 +109,10 @@ int ethash_cu_miner::get_num_devices()
 
 void ethash_cu_miner::finish()
 {
+	for (unsigned i = 0; i != m_num_buffers; i++) {
+		cudaStreamDestroy(m_streams[i]);
+		m_streams[i] = 0;
+	}
 	cudaDeviceReset();
 }
 
@@ -137,9 +143,7 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 		return false;
 	}
 	cudaDeviceReset();
-	//cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
-	cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
-	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+	cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
 
 	m_num_buffers = num_buffers;
 	m_search_batch_size = search_batch_size;
@@ -183,12 +187,18 @@ bool ethash_cu_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned num_
 	return true;
 }
 
-/*
-void ethash_cu_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
+/**
+ * Prevent High CPU usage while waiting for an async task
+ */
+static unsigned waitStream(cudaStream_t stream)
 {
-	// not ported yet
+	unsigned wait_ms = 0;
+	while (cudaStreamQuery(stream) == cudaErrorNotReady) {
+		this_thread::sleep_for(chrono::milliseconds(10));
+		wait_ms += 10;
+	}
+	return wait_ms;
 }
-*/
 
 void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
 {
@@ -223,7 +233,6 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 		pending.push({ start_nonce, buf });
 		buf = (buf + 1) % m_num_buffers;
 
-
 		// read results
 		if (pending.size() == m_num_buffers)
 		{
@@ -231,8 +240,9 @@ void ethash_cu_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 			uint32_t results[1 + c_max_search_results];
 
+			waitStream(m_streams[buf]); // 28ms
 			cudaMemcpyAsync(results, m_search_buf[batch.buf], (1 + c_max_search_results) * sizeof(uint32_t), cudaMemcpyHostToHost, m_streams[batch.buf]);
-			
+
 			unsigned num_found = std::min<unsigned>(results[0], c_max_search_results);
 			uint64_t nonces[c_max_search_results];
 			for (unsigned i = 0; i != num_found; ++i)
