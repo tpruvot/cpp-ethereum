@@ -115,8 +115,6 @@ struct ethash_full {
 	FILE* file;
 	uint64_t file_size;
 	node* data;
-	void* chunks[2]; // if the file cant be mapped in one shot
-	uint64_t chunk_size;
 };
 
 /**
@@ -170,7 +168,7 @@ uint64_t ethash_get_cachesize(uint64_t const block_number);
  * @return            true if all went fine and false for invalid parameters
  */
 bool ethash_compute_full_data(
-	struct ethash_full* eth,
+	void* mem,
 	uint64_t full_size,
 	ethash_light_t const light,
 	ethash_callback_t callback
