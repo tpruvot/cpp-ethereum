@@ -23,6 +23,13 @@
 #include <stdio.h>
 #include <errno.h>
 
+static char* LAST_DAG_FILENAME[_MAX_PATH] = { 0 };
+
+char* ethash_io_lastdag_filename()
+{
+	return &LAST_DAG_FILENAME[0];
+}
+
 enum ethash_io_rc ethash_io_prepare(
 	char const* dirname,
 	ethash_h256_t const seedhash,
@@ -33,6 +40,15 @@ enum ethash_io_rc ethash_io_prepare(
 {
 	char mutable_name[DAG_MUTABLE_NAME_MAX_SIZE];
 	enum ethash_io_rc ret = ETHASH_IO_FAIL;
+
+#ifdef WIN32
+	char buf[_MAX_PATH] = { 0 };
+	sprintf(buf, "%s", dirname);
+	if (strlen(buf) && buf[strlen(buf)-1] == '\\')
+		buf[strlen(buf)-1] = '\0';
+	dirname = buf;
+#endif
+
 	// reset errno before io calls
 	errno = 0;
 
@@ -48,6 +64,8 @@ enum ethash_io_rc ethash_io_prepare(
 		ETHASH_CRITICAL("Could not create the full DAG pathname");
 		goto end;
 	}
+
+	strcpy(LAST_DAG_FILENAME, tmpfile);
 
 	FILE *f;
 	if (!force_create) {
