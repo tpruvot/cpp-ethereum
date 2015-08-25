@@ -23,7 +23,7 @@
 # define DWORD_LO(x) (x)
 #endif
 
-void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset)
+void* mmap(void* start, size_t len, int prot, int flags, int fd, off_t offset)
 {
 	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
 		return MAP_FAILED;
@@ -47,7 +47,7 @@ void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset
 	} else
 		flProtect = PAGE_READONLY;
 
-	off_t end = length + offset;
+	off_t end = len + offset;
 	HANDLE mmap_fd, h;
 	if (fd == -1)
 		mmap_fd = INVALID_HANDLE_VALUE;
@@ -66,7 +66,7 @@ void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset
 		dwDesiredAccess |= FILE_MAP_EXECUTE;
 	if (flags & MAP_PRIVATE)
 		dwDesiredAccess |= FILE_MAP_COPY;
-	void *ret = MapViewOfFile(h, dwDesiredAccess, DWORD_HI(offset), DWORD_LO(offset), length);
+	void *ret = MapViewOfFile(h, dwDesiredAccess, DWORD_HI(offset), DWORD_LO(offset), len);
 	if (ret == NULL) {
 		ret = MAP_FAILED;
 	}
@@ -74,6 +74,30 @@ void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset
 	CloseHandle(h);
 	return ret;
 }
+
+
+void* mmap_pagefile(char *label, void* start, size_t len, int flags, off_t offset)
+{
+	HANDLE mmap_fd, h;
+	DWORD flProtect = PAGE_READWRITE;
+	off_t end = len + offset;
+
+	h = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, flProtect, DWORD_HI(end), DWORD_LO(end), label);
+	if (h == NULL)
+		return MAP_FAILED;
+
+	DWORD dwDesiredAccess= FILE_MAP_READ | FILE_MAP_WRITE;
+	if (flags & MAP_PRIVATE)
+		dwDesiredAccess |= FILE_MAP_COPY;
+	void *ret = MapViewOfFile(h, dwDesiredAccess, DWORD_HI(offset), DWORD_LO(offset), len);
+	if (ret == NULL) {
+		ret = MAP_FAILED;
+	}
+	// since we are handling the file ourselves with fd, close the Windows Handle here
+	CloseHandle(h);
+	return ret;
+}
+
 
 void munmap(void* addr, size_t length)
 {

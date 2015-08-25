@@ -455,6 +455,93 @@ fail_free_full:
 	return NULL;
 }
 
+static bool ethash_mmap_pagefile(struct ethash_full* ret)
+{
+	char* mmapped_data;
+	errno = 0;
+	ret->file = NULL;
+	mmapped_data = mmap_pagefile(
+		ret->mutable_name,
+		NULL,
+		(size_t)ret->file_size,
+		MAP_SHARED,
+		0
+	);
+	if (mmapped_data == MAP_FAILED) {
+		return false;
+	}
+	ret->data = (node*)(mmapped_data);
+	return true;
+}
+
+ethash_full_t ethash_full_new_pagefile(
+	char const* dirname,
+	ethash_h256_t const seed_hash,
+	uint64_t full_size,
+	ethash_light_t const light,
+	ethash_callback_t callback
+)
+{
+	ethash_full_t ret;
+	bool need_refresh = true;
+	FILE *f = NULL;
+	ret = calloc(sizeof(*ret), 1);
+	if (!ret) {
+		return NULL;
+	}
+	ret->file_size = (size_t)full_size;
+
+	// init ret struct
+	ethash_iomem_prepare(ret, seed_hash, (size_t)full_size);
+
+	if (!ethash_mmap_pagefile(ret)) {
+		ETHASH_CRITICAL("mmap failure()");
+		goto fail_free_full;
+	}
+
+	if (ethash_iomem_openexisting(dirname, ret, &f, (size_t)full_size) == ETHASH_IO_MEMO_MATCH) {
+		ret->file = f;
+		fseek(f, ETHASH_DAG_MAGIC_NUM_SIZE, SEEK_SET);
+		void *data = (void*) ret->data;
+		size_t nodes = (ret->file_size/sizeof(node));
+		size_t read, total = 0;
+		need_refresh = false;
+		#define nodes_per_op 128
+		for (size_t n=0; n < nodes / nodes_per_op; n++) {
+			read = fread(data, sizeof(node), nodes_per_op, f);
+			if (read != nodes_per_op) {
+				need_refresh = true;
+				break;
+			}
+			total += read;
+			data = (void*) ((off_t)data + read * sizeof(node));
+		}
+		for (size_t n=0; n < nodes % nodes_per_op; n++) {
+			read = fread(data, sizeof(node), 1, f);
+			if (read != 1) {
+				need_refresh = true;
+				break;
+			}
+			total += read;
+			data = (void*) ((off_t)data + read * sizeof(node));
+		}
+	}
+
+	// force reload
+	if (need_refresh && !ethash_compute_full_data(ret->data, full_size, light, callback)) {
+		ETHASH_CRITICAL("Failure at computing DAG data.");
+		goto fail_free_full_data;
+	}
+
+	return ret;
+
+fail_free_full_data:
+	free(ret->data);
+fail_free_full:
+	free(ret);
+	return NULL;
+}
+
 ethash_full_t ethash_full_new(ethash_light_t light, ethash_callback_t callback)
 {
 	char strbuf[256];
@@ -463,7 +550,11 @@ ethash_full_t ethash_full_new(ethash_light_t light, ethash_callback_t callback)
 	}
 	uint64_t full_size = ethash_get_datasize(light->block_number);
 	ethash_h256_t seedhash = ethash_get_seedhash(light->block_number);
+#if defined(_M_X64) || !defined(_WIN32)
 	return ethash_full_new_internal(strbuf, seedhash, full_size, light, callback);
+#else
+	return ethash_full_new_pagefile(strbuf, seedhash, full_size, light, callback);
+#endif
 }
 
 void ethash_full_delete(ethash_full_t full)

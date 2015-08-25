@@ -5,9 +5,12 @@
 #include <stdio.h>
 
 #define ENABLE_SSE 0
+#define ETHASH_PRINT_CRITICAL_OUTPUT
 
 #if defined(_M_X64) && ENABLE_SSE
-#include <smmintrin.h>
+#include <smmintrin.h> // SSE4
+#elif defined(_M_IX86_FP) && ENABLE_SSE
+#include <emmintrin.h> // SSE2
 #endif
 
 #ifdef __cplusplus
@@ -115,6 +118,10 @@ struct ethash_full {
 	FILE* file;
 	uint64_t file_size;
 	node* data;
+	// memory storage for x86
+	bool ismem;
+	ethash_h256_t seed;
+	char mutable_name[DAG_MUTABLE_NAME_MAX_SIZE];
 };
 
 /**

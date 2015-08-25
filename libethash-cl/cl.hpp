@@ -2970,7 +2970,7 @@ public:
     }
 
     cl_int enqueueNativeKernel(
-        void (*userFptr)(void *),
+        void (__stdcall *userFptr)(void *),
         std::pair<void*, ::size_t> args,
         const VECTOR_CLASS<Memory>* mem_objects = NULL,
         const VECTOR_CLASS<const void*>* mem_locs = NULL,

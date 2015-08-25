@@ -40,6 +40,14 @@
 #define ETHASH_DAG_MAGIC_NUM_SIZE 8
 #define ETHASH_DAG_MAGIC_NUM 0xFEE1DEADBADDCAFE
 
+// Maximum size for mutable part of DAG file name
+// 6 is for "full-R", the suffix of the filename
+// 10 is for maximum number of digits of a uint32_t (for REVISION)
+// 1 is for - and 16 is for the first 16 hex digits for first 8 bytes of
+// the seedhash and last 1 is for the null terminating character
+// Reference: https://github.com/ethereum/wiki/wiki/Ethash-DAG
+#define DAG_MUTABLE_NAME_MAX_SIZE (6 + 10 + 1 + 16 + 1)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

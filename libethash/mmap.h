@@ -38,7 +38,8 @@
 #define MAP_ANON      MAP_ANONYMOUS
 #define MAP_FAILED    ((void *) -1)
 
-void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset);
+void* mmap(void* start, size_t len, int prot, int flags, int fd, off_t offset);
+void* mmap_pagefile(char *label, void* start, size_t len, int flags, off_t offset);
 void munmap(void* addr, size_t length);
 #else // posix, yay! ^_^
 #include <sys/mman.h>

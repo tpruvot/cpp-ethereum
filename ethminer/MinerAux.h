@@ -606,5 +606,9 @@ private:
 	/// Farm params
 	string m_farmURL = "http://127.0.0.1:8545";
 	unsigned m_farmRecheckPeriod = 500;
+#if defined(_M_X64) || !defined(_WIN32)
 	bool m_precompute = true;
+#else
+	bool m_precompute = false; // todo
+#endif
 };
