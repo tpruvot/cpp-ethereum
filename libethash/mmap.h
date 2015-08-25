@@ -37,9 +37,14 @@
 #define MAP_ANONYMOUS 0x20
 #define MAP_ANON      MAP_ANONYMOUS
 #define MAP_FAILED    ((void *) -1)
+#define MAP_HALF      ((void *) -2)
+
+#define MAP_CHUNK_MAX_SIZE 0x30000000
+#define MAP_CHUNK_EXTRAPAD 0x00010000
 
 void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset);
 void munmap(void* addr, size_t length);
+void mmap_get_chuncks(void* *chunks);
 #else // posix, yay! ^_^
 #include <sys/mman.h>
 #endif

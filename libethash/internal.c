@@ -20,6 +20,9 @@
 * @date 2015
 */
 
+#define ETHASH_PRINT_CRITICAL_OUTPUT
+#include <Windows.h>
+
 #include <assert.h>
 #include <inttypes.h>
 #include <stddef.h>
@@ -143,12 +146,13 @@ void ethash_calculate_dag_item(
 }
 
 bool ethash_compute_full_data(
-	void* mem,
+	struct ethash_full* eth,
 	uint64_t full_size,
 	ethash_light_t const light,
 	ethash_callback_t callback
 )
 {
+	void* mem = eth->data;
 	if (full_size % (sizeof(uint32_t) * MIX_WORDS) != 0 ||
 		(full_size % sizeof(node)) != 0) {
 		return false;
@@ -157,14 +161,26 @@ bool ethash_compute_full_data(
 	node* full_nodes = mem;
 	double const progress_change = 1.0f / max_n;
 	double progress = 0.0f;
+	uint32_t max_cn = max_n;
+	if (eth->chunk_size) {
+		max_cn = (uint32_t)(eth->chunk_size / sizeof(node));
+	}
+
 	// now compute full nodes
-	for (uint32_t n = 0; n != max_n; ++n) {
+	for (uint32_t n = 0; n != max_cn; ++n) {
 		if (callback &&
 			n % (max_n / 100) == 0 &&
 			callback((unsigned int)(ceil(progress * 100.0f))) != 0) {
 
 			return false;
 		}
+		progress += progress_change;
+		ethash_calculate_dag_item(&(full_nodes[n]), n, light);
+	}
+	// second chunk...
+	if (max_cn < max_n)
+		full_nodes = (node*) eth->chunks[1];
+	for (uint32_t n = 0; n < max_n - max_cn; ++n) {
 		progress += progress_change;
 		ethash_calculate_dag_item(&(full_nodes[n]), n, light);
 	}
@@ -365,6 +381,7 @@ static bool ethash_mmap(struct ethash_full* ret, FILE* f)
 	int fd;
 	char* mmapped_data;
 	errno = 0;
+	fseek(f, 0, SEEK_SET);
 	ret->file = f;
 	if ((fd = ethash_fileno(ret->file)) == -1) {
 		return false;
@@ -379,6 +396,17 @@ static bool ethash_mmap(struct ethash_full* ret, FILE* f)
 	);
 	if (mmapped_data == MAP_FAILED) {
 		return false;
+	} else if (mmapped_data == MAP_HALF) {
+		uint64_t cutted_node;
+		mmap_get_chuncks(ret->chunks);
+		mmapped_data = ret->chunks[0];
+		ret->chunk_size = MAP_CHUNK_MAX_SIZE - ETHASH_DAG_MAGIC_NUM_SIZE;
+		cutted_node = ret->chunk_size % sizeof(node);
+		ret->chunk_size -= cutted_node;
+		ret->chunks[1] = (void*)(ETHASH_DAG_MAGIC_NUM_SIZE + (off_t)ret->chunks[1] + (MAP_CHUNK_EXTRAPAD - cutted_node));
+	} else {
+		ret->chunks[0] = NULL;
+		ret->chunk_size = 0;
 	}
 	ret->data = (node*)(mmapped_data + ETHASH_DAG_MAGIC_NUM_SIZE);
 	return true;
@@ -405,7 +433,8 @@ ethash_full_t ethash_full_new_internal(
 		goto fail_free_full;
 	case ETHASH_IO_MEMO_MATCH:
 		if (!ethash_mmap(ret, f)) {
-			ETHASH_CRITICAL("mmap failure()");
+			unsigned int err = GetLastError();
+			ETHASH_CRITICAL("mmap failure(%s)", strerror(err));
 			goto fail_close_file;
 		}
 		return ret;
@@ -424,7 +453,7 @@ ethash_full_t ethash_full_new_internal(
 		break;
 	}
 
-	if (!ethash_compute_full_data(ret->data, full_size, light, callback)) {
+	if (!ethash_compute_full_data(ret, full_size, light, callback)) {
 		ETHASH_CRITICAL("Failure at computing DAG data.");
 		goto fail_free_full_data;
 	}
