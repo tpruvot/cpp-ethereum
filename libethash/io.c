@@ -191,7 +191,7 @@ enum ethash_io_rc ethash_iomem_openexisting(
 	strcpy(LAST_DAG_FILENAME, tmpfile);
 
 	// try to open the file
-	FILE *f = ethash_fopen(tmpfile, "rb+");
+	FILE *f = ethash_fopen(tmpfile, "rb");
 	if (f) {
 		size_t found_size;
 		if (!ethash_file_size(f, &found_size)) {
@@ -204,8 +204,9 @@ enum ethash_io_rc ethash_iomem_openexisting(
 			ret = ETHASH_IO_MEMO_SIZE_MISMATCH;
 			goto free_memo;
 		}
+		ret = ETHASH_IO_MEMO_MATCH;
 	}
-	ret = ETHASH_IO_MEMO_MATCH;
+
 set_file:
 	*output_file = f;
 free_memo:

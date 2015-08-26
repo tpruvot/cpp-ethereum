@@ -500,8 +500,10 @@ ethash_full_t ethash_full_new_pagefile(
 	}
 
 	if (ethash_iomem_openexisting(dirname, ret, &f, (size_t)full_size) == ETHASH_IO_MEMO_MATCH) {
-		ret->file = f;
-		fseek(f, ETHASH_DAG_MAGIC_NUM_SIZE, SEEK_SET);
+		if (!f || fseek(f, ETHASH_DAG_MAGIC_NUM_SIZE, SEEK_SET)) {
+			need_refresh = true;
+			goto refresh;
+		}
 		void *data = (void*) ret->data;
 		size_t nodes = (ret->file_size/sizeof(node));
 		size_t read, total = 0;
@@ -511,7 +513,7 @@ ethash_full_t ethash_full_new_pagefile(
 			read = fread(data, sizeof(node), nodes_per_op, f);
 			if (read != nodes_per_op) {
 				need_refresh = true;
-				break;
+				goto refresh;
 			}
 			total += read;
 			data = (void*) ((off_t)data + read * sizeof(node));
@@ -520,13 +522,15 @@ ethash_full_t ethash_full_new_pagefile(
 			read = fread(data, sizeof(node), 1, f);
 			if (read != 1) {
 				need_refresh = true;
-				break;
+				goto refresh;
 			}
 			total += read;
 			data = (void*) ((off_t)data + read * sizeof(node));
 		}
+		ret->file = f;
 	}
 
+refresh:
 	// force reload
 	if (need_refresh && !ethash_compute_full_data(ret->data, full_size, light, callback)) {
 		ETHASH_CRITICAL("Failure at computing DAG data.");

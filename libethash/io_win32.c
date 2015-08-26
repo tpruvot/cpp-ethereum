@@ -23,14 +23,19 @@
 #include <direct.h>
 #include <errno.h>
 #include <stdio.h>
+#include <share.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <shlobj.h>
 
 FILE* ethash_fopen(char const* file_name, char const* mode)
 {
+#ifdef WIN32
+	 return _fsopen(file_name, mode, _SH_DENYWR);
+#else
 	FILE* f;
 	return fopen_s(&f, file_name, mode) == 0 ? f : NULL;
+#endif
 }
 
 char* ethash_strncat(char* dest, size_t dest_size, char const* src, size_t count)
