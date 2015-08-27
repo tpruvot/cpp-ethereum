@@ -25,11 +25,11 @@
 #include "io.h"
 #include "internal.h"
 
-static char* LAST_DAG_FILENAME[_MAX_PATH] = { 0 };
+static char LAST_DAG_FILENAME[_MAX_PATH] = { 0 };
 
 char* ethash_io_lastdag_filename()
 {
-	return &LAST_DAG_FILENAME[0];
+	return LAST_DAG_FILENAME;
 }
 
 enum ethash_io_rc ethash_io_prepare(
@@ -67,7 +67,7 @@ enum ethash_io_rc ethash_io_prepare(
 		goto end;
 	}
 
-	strcpy(LAST_DAG_FILENAME, tmpfile);
+	strcpy(&LAST_DAG_FILENAME[0], tmpfile);
 
 	FILE *f;
 	if (!force_create) {
@@ -207,7 +207,6 @@ enum ethash_io_rc ethash_iomem_openexisting(
 		ret = ETHASH_IO_MEMO_MATCH;
 	}
 
-set_file:
 	*output_file = f;
 free_memo:
 	free(tmpfile);
