@@ -267,6 +267,8 @@ public:
 			m_currentBlock = stol(argv[++i]);
 		else if (arg == "--no-precompute")
 			m_precompute = false;
+		else if (arg == "--precompute")
+			m_precompute = true;
 		else if ((arg == "-D" || arg == "--create-dag") && i + 1 < argc)
 		{
 			string m = boost::to_lower_copy(string(argv[++i]));
@@ -813,5 +815,9 @@ private:
 	/// Farm params
 	string m_farmURL = "http://127.0.0.1:8545";
 	unsigned m_farmRecheckPeriod = 500;
+#if defined (_WIN32) && defined(__MACHINEX86)
+	bool m_precompute = false;
+#else
 	bool m_precompute = true;
+#endif
 };

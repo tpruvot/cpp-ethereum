@@ -157,6 +157,7 @@ EthashAux::FullAllocation::FullAllocation(ethash_light_t _light, ethash_callback
 	if (!full)
 	{
 		clog(DAGChannel) << "DAG Generation Failure. Reason: "  << strerror(errno);
+		exit(1);
 		BOOST_THROW_EXCEPTION(ExternalFunctionFailure("ethash_full_new"));
 	}
 }

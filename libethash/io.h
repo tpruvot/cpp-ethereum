@@ -33,13 +33,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// Maximum size for mutable part of DAG file name
-// 6 is for "full-R", the suffix of the filename
-// 10 is for maximum number of digits of a uint32_t (for REVISION)
-// 1 is for - and 16 is for the first 16 hex digits for first 8 bytes of
-// the seedhash and last 1 is for the null terminating character
-// Reference: https://github.com/ethereum/wiki/wiki/Ethash-DAG
-#define DAG_MUTABLE_NAME_MAX_SIZE (6 + 10 + 1 + 16 + 1)
+
 /// Possible return values of @see ethash_io_prepare
 enum ethash_io_rc {
 	ETHASH_IO_FAIL = 0,           ///< There has been an IO failure
@@ -97,6 +91,21 @@ enum ethash_io_rc ethash_io_prepare(
 	FILE** output_file,
 	uint64_t file_size,
 	bool force_create
+);
+
+// load file to pagefile if it exists...
+enum ethash_io_rc ethash_iomem_prepare(
+	ethash_full_t eth,
+	ethash_h256_t const seedhash,
+	size_t file_size
+);
+
+// load file to pagefile if it exists...
+enum ethash_io_rc ethash_iomem_openexisting(
+	char const* dirname,
+	ethash_full_t const eth,
+	FILE** output_file,
+	uint64_t file_size
 );
 
 /**

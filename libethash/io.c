@@ -18,10 +18,19 @@
  * @author Lefteris Karapetsas <lefteris@ethdev.com>
  * @date 2015
  */
-#include "io.h"
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+
+#include "io.h"
+#include "internal.h"
+
+static char LAST_DAG_FILENAME[_MAX_PATH] = { 0 };
+
+char* ethash_io_lastdag_filename()
+{
+	return LAST_DAG_FILENAME;
+}
 
 enum ethash_io_rc ethash_io_prepare(
 	char const* dirname,
@@ -33,6 +42,15 @@ enum ethash_io_rc ethash_io_prepare(
 {
 	char mutable_name[DAG_MUTABLE_NAME_MAX_SIZE];
 	enum ethash_io_rc ret = ETHASH_IO_FAIL;
+
+#ifdef WIN32
+	char buf[_MAX_PATH] = { 0 };
+	sprintf(buf, "%s", dirname);
+	if (strlen(buf) && buf[strlen(buf)-1] == '\\')
+		buf[strlen(buf)-1] = '\0';
+	dirname = buf;
+#endif
+
 	// reset errno before io calls
 	errno = 0;
 
@@ -48,6 +66,8 @@ enum ethash_io_rc ethash_io_prepare(
 		ETHASH_CRITICAL("Could not create the full DAG pathname");
 		goto end;
 	}
+
+	strcpy(&LAST_DAG_FILENAME[0], tmpfile);
 
 	FILE *f;
 	if (!force_create) {
@@ -111,6 +131,58 @@ enum ethash_io_rc ethash_io_prepare(
 
 	ret = ETHASH_IO_MEMO_MATCH;
 set_file:
+	*output_file = f;
+free_memo:
+	free(tmpfile);
+end:
+	return ret;
+}
+
+enum ethash_io_rc ethash_iomem_prepare(
+	ethash_full_t eth,
+	ethash_h256_t const seedhash,
+	size_t file_size
+)
+{
+	ethash_io_mutable_name(ETHASH_REVISION, &seedhash, eth->mutable_name);
+	eth->ismem = true;
+	eth->seed = seedhash;
+	return ETHASH_IO_MEMO_MISMATCH;
+}
+
+enum ethash_io_rc ethash_iomem_openexisting(
+	char const* dirname,
+	ethash_full_t const eth,
+	FILE** output_file,
+	uint64_t file_size
+)
+{
+	enum ethash_io_rc ret = ETHASH_IO_FAIL;
+
+	char* tmpfile = ethash_io_create_filename(dirname, eth->mutable_name, strlen(eth->mutable_name));
+	if (!tmpfile) {
+		goto end;
+	}
+
+	strcpy(LAST_DAG_FILENAME, tmpfile);
+
+	// try to open the file
+	FILE *f = ethash_fopen(tmpfile, "rb");
+	if (f) {
+		size_t found_size;
+		if (!ethash_file_size(f, &found_size)) {
+			fclose(f);
+			ETHASH_CRITICAL("Could not query size of DAG file: \"%s\"", tmpfile);
+			goto free_memo;
+		}
+		if (file_size != found_size - ETHASH_DAG_MAGIC_NUM_SIZE) {
+			fclose(f);
+			ret = ETHASH_IO_MEMO_SIZE_MISMATCH;
+			goto free_memo;
+		}
+		ret = ETHASH_IO_MEMO_MATCH;
+	}
+
 	*output_file = f;
 free_memo:
 	free(tmpfile);
